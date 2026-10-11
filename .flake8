@@ -9,3 +9,5 @@ exclude =
     .vscode,
     tests/__pycache__
 max-line-length = 79
+per-file-ignores =
+    tradestands/settings.py:E501

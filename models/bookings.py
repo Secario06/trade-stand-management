@@ -55,6 +55,16 @@ def is_stand_available(
     return True
 
 
+def find_booking_by_id(
+    bookings: List[Booking], booking_id: int
+) -> Optional[Booking]:
+    """Найти бронирование по идентификатору."""
+    for booking in bookings:
+        if booking.id == booking_id:
+            return booking
+    return None
+
+
 def create_booking(
     bookings: List[Booking],
     stand: Stand,

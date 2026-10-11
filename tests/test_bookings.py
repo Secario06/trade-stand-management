@@ -3,6 +3,7 @@ from models.bookings import (
     is_stand_available,
     create_booking,
     cancel_booking,
+    find_booking_by_id,
     get_booking_status,
 )
 
@@ -99,3 +100,12 @@ def test_cancel_nonexistent_booking():
 def test_get_booking_status():
     assert get_booking_status(True) == "Стенд доступен для бронирования"
     assert get_booking_status(False) == "Стенд уже занят на эту дату"
+
+
+def test_find_booking_by_id():
+    bookings = []
+    booking = create_booking(
+        bookings, _make_stand(), "2026-10-15", _make_user()
+    )
+    assert find_booking_by_id(bookings, booking.id) is booking
+    assert find_booking_by_id(bookings, 999) is None
