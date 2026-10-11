@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import SimpleTestCase
 
 
@@ -8,15 +10,31 @@ class StandsViewsTests(SimpleTestCase):
         self.assertContains(response, "Павильон А")
         self.assertContains(response, 'href="/stands/1/"')
 
+    def test_stand_list_templates_and_context(self):
+        response = self.client.get("/stands/")
+        self.assertTemplateUsed(response, "stands/stand_list.html")
+        self.assertTemplateUsed(response, "stands/includes/stand_card.html")
+        self.assertTemplateUsed(response, "base.html")
+        self.assertEqual(len(response.context["stands"]), 4)
+        self.assertContains(response, "Всего стендов: 4")
+
+    def test_stand_list_empty(self):
+        with patch("stands.views.load_dataset", return_value=([], [], [])):
+            response = self.client.get("/stands/")
+        self.assertContains(response, "Стенды не найдены.")
+        self.assertContains(response, "Всего стендов: 0")
+
     def test_stand_detail(self):
         response = self.client.get("/stands/1/")
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "stands/stand_detail.html")
         self.assertContains(response, "Павильон А")
         self.assertContains(response, "Площадь")
 
     def test_stand_detail_not_found(self):
         response = self.client.get("/stands/999/")
         self.assertEqual(response.status_code, 404)
+        self.assertIsNone(response.context["stand"])
         self.assertContains(
             response, "Стенд не найден", status_code=404
         )

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Стенды – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    <h1>Стенды</h1>
+
+    <p>
+        Всего стендов: {{ stands|length }}
+    </p>
+
+    {% for stand in stands %}
+        {% include "stands/includes/stand_card.html" %}
+    {% empty %}
+        <p>Стенды не найдены.</p>
+    {% endfor %}
+{% endblock %}

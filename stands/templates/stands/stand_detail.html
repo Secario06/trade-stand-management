@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if stand %}
+        {{ stand.name }} – Торговые стенды
+    {% else %}
+        Стенд не найден – Торговые стенды
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if stand %}
+        {% if invalid_date %}
+            <div class="alert alert-warning">
+                Неверная дата, показана доступность на сегодня.
+            </div>
+        {% endif %}
+
+        <div class="card stand-card">
+            <div class="card-body">
+                <h1 class="card-title h3">
+                    {{ stand.name|default:"Без названия" }}
+                </h1>
+
+                <p class="card-text">
+                    <strong>ID:</strong> {{ stand.id }}
+                </p>
+
+                <p class="card-text">
+                    <strong>Тип:</strong> {{ stand.stand_type }}
+                </p>
+
+                <p class="card-text">
+                    <strong>Площадь:</strong>
+                    {{ stand.area|floatformat:1 }} кв.м.
+                </p>
+
+                <p class="card-text">
+                    Доступность на {{ check_date|date:"d.m.Y" }}:
+                    {% if available %}
+                        <span class="badge bg-success">доступен</span>
+                    {% else %}
+                        <span class="badge bg-danger">занят</span>
+                    {% endif %}
+                </p>
+
+                <p class="card-text text-muted">
+                    {{ availability_text }}
+                </p>
+
+                <form method="get" class="row g-2 mb-3">
+                    <div class="col-auto">
+                        <input
+                            type="date"
+                            name="date"
+                            class="form-control"
+                            value="{{ check_date|date:'Y-m-d' }}"
+                        >
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary">
+                            Проверить дату
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% else %}
+        <h1 class="text-danger">Стенд не найден</h1>
+        <p>Стенд с указанным идентификатором отсутствует.</p>
+    {% endif %}
+
+    <a
+        href="{% url 'stands:list' %}"
+        class="btn btn-outline-secondary mt-3"
+    >
+        ← к списку стендов
+    </a>
+{% endblock %}

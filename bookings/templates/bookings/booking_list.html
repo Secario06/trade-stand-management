@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Бронирования – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    <h1>Бронирования</h1>
+
+    <p>
+        Всего бронирований: {{ bookings|length }}
+    </p>
+
+    <ul class="list-group">
+        {% for booking in bookings %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>
+                    <a href="{% url 'bookings:detail' booking.id %}">
+                        Бронирование №{{ booking.id }}
+                    </a>
+                    – {{ booking.stand.name }},
+                    {{ booking.booking_date }},
+                    {{ booking.user.name }}
+                </span>
+                {% include "bookings/includes/booking_status.html" %}
+            </li>
+        {% empty %}
+            <li class="list-group-item">Бронирования не найдены.</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

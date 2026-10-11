@@ -1,0 +1,19 @@
+<article class="card stand-card mb-3">
+    <div class="card-body">
+        <h2 class="card-title h4">
+            {{ stand.name|default:"Без названия" }}
+        </h2>
+
+        <p class="card-text">
+            Тип: {{ stand.stand_type }}
+            · Площадь: {{ stand.area|floatformat:1 }} кв.м.
+        </p>
+
+        <a
+            href="{% url 'stands:detail' stand.id %}"
+            class="btn btn-primary"
+        >
+            Подробнее
+        </a>
+    </div>
+</article>

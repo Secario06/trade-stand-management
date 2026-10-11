@@ -1,0 +1,35 @@
+body {
+    min-height: 100vh;
+    background-color: #f7f5f0;
+}
+
+.site-logo {
+    display: block;
+    height: 64px;
+    width: auto;
+    margin: 1rem 0;
+}
+
+.stand-card {
+    border-left: 5px solid #d9822b;
+    border-radius: 8px;
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.stand-card:hover {
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
+}
+
+.booking-status {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.booking-status-cancelled {
+    text-decoration: line-through;
+}
+
+footer {
+    border-top: 1px solid #ddd;
+    padding-top: 1rem;
+}

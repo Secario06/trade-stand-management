@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Главная – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    <h1 class="display-4">Система управления торговыми стендами</h1>
+
+    <p class="lead">
+        Учёт стендов и управление их бронированием.
+    </p>
+    <p>Основные разделы:</p>
+    <a href="{% url 'stands:list' %}" class="btn btn-primary me-2">
+        Стенды
+    </a>
+    <a href="{% url 'bookings:bookings' %}" class="btn btn-secondary">
+        Бронирования
+    </a>
+{% endblock %}
