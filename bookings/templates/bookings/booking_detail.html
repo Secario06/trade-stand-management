@@ -18,8 +18,8 @@
 
                 <p class="card-text">
                     <strong>Стенд:</strong>
-                    <a href="{% url 'stands:detail' booking.stand.id %}">
-                        {{ booking.stand.name }}
+                    <a href="{% url 'stands:detail' booking.stand_id %}">
+                        {{ booking.stand_name }}
                     </a>
                 </p>
 
@@ -30,7 +30,7 @@
 
                 <p class="card-text">
                     <strong>Арендатор:</strong>
-                    {{ booking.user.name }} ({{ booking.user.email }})
+                    {{ booking.user_name }} ({{ booking.user_email }})
                 </p>
 
                 <p class="card-text">

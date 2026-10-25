@@ -26,7 +26,7 @@ DATA_DIR = BASE_DIR / "data"
 SECRET_KEY = 'django-insecure-9-krmlrc3%(d0a+8_e(n5f@ses6^1_*a%a)u77@=*h6-12b5+@'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 

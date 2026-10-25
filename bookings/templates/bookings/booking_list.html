@@ -8,7 +8,15 @@
     <h1>Бронирования</h1>
 
     <p>
-        Всего бронирований: {{ bookings|length }}
+        {% if show_all %}
+            Все бронирования: {{ bookings|length }}.
+            <a href="{% url 'bookings:bookings' %}">Показать только активные</a>
+        {% else %}
+            Активных бронирований: {{ bookings|length }}.
+            <a href="{% url 'bookings:bookings' %}?show=all">
+                Показать вместе с отменёнными
+            </a>
+        {% endif %}
     </p>
 
     <ul class="list-group">
@@ -18,9 +26,9 @@
                     <a href="{% url 'bookings:detail' booking.id %}">
                         Бронирование №{{ booking.id }}
                     </a>
-                    – {{ booking.stand.name }},
+                    – {{ booking.stand_name }} ({{ booking.area|floatformat:1 }} кв.м.),
                     {{ booking.booking_date }},
-                    {{ booking.user.name }}
+                    {{ booking.user_name }}
                 </span>
                 {% include "bookings/includes/booking_status.html" %}
             </li>

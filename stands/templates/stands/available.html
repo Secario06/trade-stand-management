@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Свободные стенды – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    <h1>Свободные стенды</h1>
+
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-auto">
+            <label for="date" class="col-form-label">Дата:</label>
+        </div>
+        <div class="col-auto">
+            <input
+                type="date"
+                id="date"
+                name="date"
+                class="form-control"
+                value="{{ check_date|date:'Y-m-d' }}"
+            >
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Найти</button>
+        </div>
+    </form>
+
+    {% if invalid_date %}
+        <div class="alert alert-warning">
+            Неверная дата. Укажите дату в формате ГГГГ-ММ-ДД.
+        </div>
+    {% endif %}
+
+    {% if check_date %}
+        <h2 class="h4">Дата: {{ check_date|date:"d.m.Y" }}</h2>
+
+        {% for stand in stands %}
+            {% include "stands/includes/stand_card.html" %}
+        {% empty %}
+            <p>На выбранную дату свободных стендов нет.</p>
+        {% endfor %}
+    {% endif %}
+
+    <a href="{% url 'stands:list' %}" class="btn btn-outline-secondary mt-3">
+        ← ко всем стендам
+    </a>
+{% endblock %}

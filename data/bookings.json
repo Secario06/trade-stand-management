@@ -19,5 +19,19 @@
         "date": "2026-10-20",
         "user_id": 3,
         "is_cancelled": true
+    },
+    {
+        "id": 4,
+        "stand_id": 1,
+        "date": "2026-10-22",
+        "user_id": 2,
+        "is_cancelled": false
+    },
+    {
+        "id": 5,
+        "stand_id": 3,
+        "date": "2026-10-25",
+        "user_id": 3,
+        "is_cancelled": false
     }
 ]

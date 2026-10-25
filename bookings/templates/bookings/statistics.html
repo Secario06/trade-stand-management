@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Статистика – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    <h1>Статистика бронирований</h1>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stand-card"><div class="card-body">
+                <div class="text-muted">Активных бронирований</div>
+                <div class="fs-3">{{ totals.active_bookings }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stand-card"><div class="card-body">
+                <div class="text-muted">Стендов</div>
+                <div class="fs-3">{{ totals.stands_count }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stand-card"><div class="card-body">
+                <div class="text-muted">Общая площадь</div>
+                <div class="fs-3">{{ totals.total_area|floatformat:1 }} кв.м.</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stand-card"><div class="card-body">
+                <div class="text-muted">Площадь стенда</div>
+                <div class="fs-6">
+                    мин. {{ totals.min_area|floatformat:1 }},
+                    сред. {{ totals.avg_area|floatformat:1 }},
+                    макс. {{ totals.max_area|floatformat:1 }}
+                </div>
+            </div></div>
+        </div>
+    </div>
+
+    <h2 class="h4">Бронирования по стендам</h2>
+    <ul class="list-group mb-4">
+        {% for item in by_stand %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ item.stand_name }}</span>
+                <span class="badge bg-primary">{{ item.bookings_count }}</span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">Данные отсутствуют.</li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="h4">Бронирования по арендаторам</h2>
+    <ul class="list-group mb-4">
+        {% for item in by_user %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ item.user_name }}</span>
+                <span class="badge bg-primary">{{ item.bookings_count }}</span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">Данные отсутствуют.</li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="h4">Востребованные стенды (более одного бронирования)</h2>
+    <ul class="list-group mb-4">
+        {% for item in popular %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ item.stand_name }}</span>
+                <span class="badge bg-success">{{ item.bookings_count }}</span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">Таких стендов пока нет.</li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="h4">Стенды по типам</h2>
+    <ul class="list-group mb-4">
+        {% for item in by_type %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ item.stand_type }}</span>
+                <span>
+                    {{ item.stands_count }} шт., средняя площадь
+                    {{ item.avg_area|floatformat:1 }} кв.м.
+                </span>
+            </li>
+        {% empty %}
+            <li class="list-group-item">Данные отсутствуют.</li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="h4">Последние бронирования</h2>
+    <ul class="list-group">
+        {% for booking in latest %}
+            <li class="list-group-item">
+                <a href="{% url 'bookings:detail' booking.id %}">
+                    Бронирование №{{ booking.id }}
+                </a>
+                – {{ booking.stand_name }}, {{ booking.booking_date }},
+                {{ booking.user_name }}
+            </li>
+        {% empty %}
+            <li class="list-group-item">Бронирований пока нет.</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

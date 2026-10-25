@@ -7,8 +7,40 @@
 {% block content %}
     <h1>Стенды</h1>
 
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-sm-5">
+            <input
+                type="text"
+                name="q"
+                class="form-control"
+                placeholder="Часть названия"
+                value="{{ query }}"
+            >
+        </div>
+        <div class="col-sm-3">
+            <input
+                type="text"
+                name="min_area"
+                class="form-control"
+                placeholder="Площадь от, кв.м"
+                value="{{ min_area }}"
+            >
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Найти</button>
+            <a href="{% url 'stands:list' %}" class="btn btn-outline-secondary">
+                Сбросить
+            </a>
+        </div>
+    </form>
+
+    {% if error %}
+        <div class="alert alert-warning">{{ error }}</div>
+    {% endif %}
+
     <p>
-        Всего стендов: {{ stands|length }}
+        Найдено стендов: {{ stands|length }}.
+        <a href="{% url 'stands:available' %}">Найти свободный стенд</a>
     </p>
 
     {% for stand in stands %}
