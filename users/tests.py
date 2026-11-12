@@ -22,3 +22,4 @@ class UserModelTests(TestCase):
     def test_reverse_relation_to_bookings(self):
         user = User.objects.get(pk=2)
         self.assertEqual(user.bookings.count(), 3)
+        self.assertEqual(user.bookings.active().count(), 3)

@@ -13,7 +13,7 @@
 
             <p class="card-text">
                 <strong>Стенд:</strong>
-                <a href="{% url 'stands:detail' booking.stand.pk %}">
+                <a href="{{ booking.stand.get_absolute_url }}">
                     {{ booking.stand.name }}
                 </a>
             </p>

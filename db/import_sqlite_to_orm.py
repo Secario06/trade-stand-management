@@ -101,7 +101,12 @@ def main(source_db=SOURCE_DB, verbose=True):
                     "booking_date": date.fromisoformat(
                         row["booking_date"]
                     ),
-                    "is_cancelled": bool(row["is_cancelled"]),
+                    # Булев признак исходной базы превращается в статус.
+                    "status": (
+                        Booking.Status.CANCELLED
+                        if row["is_cancelled"]
+                        else Booking.Status.ACTIVE
+                    ),
                 },
             )
 

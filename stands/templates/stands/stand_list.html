@@ -26,6 +26,26 @@
                 value="{{ min_area }}"
             >
         </div>
+        <div class="col-sm-2">
+            <select name="sort" class="form-select" aria-label="Сортировка">
+                <option value="name" {% if sort == "name" %}selected{% endif %}>
+                    По названию
+                </option>
+                <option value="area" {% if sort == "area" %}selected{% endif %}>
+                    По площади
+                </option>
+            </select>
+        </div>
+        <div class="col-sm-2">
+            <select name="direction" class="form-select" aria-label="Порядок">
+                <option value="asc" {% if direction == "asc" %}selected{% endif %}>
+                    По возрастанию
+                </option>
+                <option value="desc" {% if direction == "desc" %}selected{% endif %}>
+                    По убыванию
+                </option>
+            </select>
+        </div>
         <div class="col-auto">
             <button type="submit" class="btn btn-primary">Найти</button>
             <a href="{% url 'stands:list' %}" class="btn btn-outline-secondary">

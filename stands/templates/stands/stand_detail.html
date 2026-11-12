@@ -28,6 +28,9 @@
             <p class="card-text">
                 <strong>Площадь:</strong>
                 {{ stand.area|floatformat:1 }} кв.м.
+                {% if stand.is_large %}
+                    <span class="badge bg-warning text-dark">Большой стенд</span>
+                {% endif %}
             </p>
 
             <p class="card-text">

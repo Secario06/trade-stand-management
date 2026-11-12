@@ -16,29 +16,45 @@ SORT_FIELDS = {
     "user": "user__name",
 }
 
+# Допустимые значения параметра status: методы менеджера Booking.objects.
+STATUS_FILTERS = {
+    "active": "active",
+    "cancelled": "cancelled",
+    "completed": "completed",
+}
+STATUS_CHOICES = [
+    ("active", "Активные"),
+    ("cancelled", "Отменённые"),
+    ("completed", "Завершённые"),
+    ("all", "Все"),
+]
+
 PAGE_SIZE = 5
 
 
 def booking_list(request):
     """Страница /bookings/: список бронирований.
 
-    Поддерживает фильтры (date, stand, user, type, q, show=all),
+    Поддерживает фильтры (status, date, stand, user, type, q),
     сортировку (sort) и постраничный вывод (page).
     """
+    status = request.GET.get("status", "active")
     booking_date = request.GET.get("date", "").strip()
     stand_id = request.GET.get("stand", "").strip()
     user_id = request.GET.get("user", "").strip()
     stand_type = request.GET.get("type", "").strip()
     search = request.GET.get("q", "").strip()
-    show_all = request.GET.get("show") == "all"
     sort = request.GET.get("sort", "date")
     error = None
 
-    bookings_data = Booking.objects.all()
-
-    # По умолчанию отменённые бронирования исключаются.
-    if not show_all:
-        bookings_data = bookings_data.exclude(is_cancelled=True)
+    # Статус выбирается из заранее заданного набора: по умолчанию
+    # показываются активные бронирования.
+    if status != "all" and status not in STATUS_FILTERS:
+        status = "active"
+    if status == "all":
+        bookings_data = Booking.objects.all()
+    else:
+        bookings_data = getattr(Booking.objects, STATUS_FILTERS[status])()
 
     # Фильтр по дате с проверкой формата.
     if booking_date:
@@ -49,9 +65,7 @@ def booking_list(request):
         except ValueError:
             error = "Укажите корректную дату."
         else:
-            bookings_data = bookings_data.filter(
-                booking_date=selected_date
-            )
+            bookings_data = bookings_data.for_date(selected_date)
 
     # Фильтры по внешним ключам (идентификаторы проверяются).
     if stand_id.isdigit():
@@ -86,7 +100,7 @@ def booking_list(request):
         .values(
             "id",
             "booking_date",
-            "is_cancelled",
+            "status",
             "stand_name",
             "area",
             "user_name",
@@ -106,12 +120,13 @@ def booking_list(request):
         "selected_stand": stand_id,
         "selected_user": user_id,
         "selected_type": stand_type,
+        "selected_status": status,
         "search": search,
-        "show_all": show_all,
         "sort": sort,
         "stands": Stand.objects.order_by("name"),
         "users": User.objects.order_by("name"),
         "stand_types": Stand.StandType.choices,
+        "status_choices": STATUS_CHOICES,
         "error": error,
     }
     return render(request, "bookings/booking_list.html", context)
@@ -133,20 +148,29 @@ def booking_detail(request, booking_id):
 
 def statistics(request):
     """Страница /bookings/statistics/: статистика бронирований."""
-    # Условие подсчёта: только активные бронирования.
-    active = Q(bookings__is_cancelled=False)
+    status = Booking.Status
 
-    # Сводные показатели по стендам (aggregate).
-    totals = Stand.objects.aggregate(
-        stands_count=Count("pk"),
-        min_area=Min("area"),
-        max_area=Max("area"),
-        avg_area=Avg("area"),
-        total_area=Sum("area"),
+    # Общие показатели по статусам (aggregate с условиями Q).
+    totals = Booking.objects.aggregate(
+        total_bookings=Count("id"),
+        active_bookings=Count("id", filter=Q(status=status.ACTIVE)),
+        cancelled_bookings=Count("id", filter=Q(status=status.CANCELLED)),
+        completed_bookings=Count("id", filter=Q(status=status.COMPLETED)),
     )
-    totals["active_bookings"] = Booking.objects.filter(
-        is_cancelled=False
-    ).count()
+
+    # Сводные показатели по площади стендов.
+    totals.update(
+        Stand.objects.aggregate(
+            stands_count=Count("pk"),
+            min_area=Min("area"),
+            max_area=Max("area"),
+            avg_area=Avg("area"),
+            total_area=Sum("area"),
+        )
+    )
+
+    # Условие подсчёта: только активные бронирования.
+    active = Q(bookings__status=status.ACTIVE)
 
     # Активные бронирования каждого стенда. Запрос строится от Stand,
     # поэтому стенды без бронирований остаются в результате (счётчик 0).
@@ -159,7 +183,19 @@ def statistics(request):
         bookings_count=Count("bookings", filter=active),
     ).order_by("-bookings_count", "name")
 
-    # Группировка по типу стенда.
+    # Группировка бронирований по статусу.
+    counts_by_status = dict(
+        Booking.objects
+        .values_list("status")
+        .annotate(bookings_count=Count("pk"))
+        .order_by("status")
+    )
+    by_status = [
+        {"label": label, "count": counts_by_status.get(value, 0)}
+        for value, label in status.choices
+    ]
+
+    # Группировка стендов по типу.
     by_type = (
         Stand.objects
         .values("stand_type")
@@ -182,6 +218,7 @@ def statistics(request):
         "totals": totals,
         "by_stand": by_stand,
         "by_user": by_user,
+        "by_status": by_status,
         "by_type": by_type,
         "popular": popular,
         "latest": latest,

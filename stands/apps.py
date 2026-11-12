@@ -5,6 +5,7 @@ from django.db.backends.signals import connection_created
 class StandsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'stands'
+    verbose_name = "Торговые стенды"
 
     def ready(self):
         # Поиск icontains должен работать с кириллицей в SQLite.

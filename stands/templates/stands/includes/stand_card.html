@@ -2,6 +2,9 @@
     <div class="card-body">
         <h2 class="card-title h4">
             {{ stand.name|default:"Без названия" }}
+            {% if stand.is_large %}
+                <span class="badge bg-warning text-dark">Большой</span>
+            {% endif %}
         </h2>
 
         <p class="card-text">
@@ -10,7 +13,7 @@
         </p>
 
         <a
-            href="{% url 'stands:detail' stand.id %}"
+            href="{{ stand.get_absolute_url }}"
             class="btn btn-primary"
         >
             Подробнее

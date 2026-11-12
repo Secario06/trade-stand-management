@@ -29,7 +29,9 @@
   "fields": {
     "name": "Павильон А",
     "area": 25.0,
-    "stand_type": "Стандарт"
+    "stand_type": "Стандарт",
+    "slug": "pavilon-a-1",
+    "is_large": false
   }
 },
 {
@@ -38,7 +40,9 @@
   "fields": {
     "name": "Павильон Б",
     "area": 18.5,
-    "stand_type": "Стандарт"
+    "stand_type": "Стандарт",
+    "slug": "pavilon-b-2",
+    "is_large": false
   }
 },
 {
@@ -47,7 +51,9 @@
   "fields": {
     "name": "Премиум-зона",
     "area": 50.0,
-    "stand_type": "Премиум"
+    "stand_type": "Премиум",
+    "slug": "premium-zona-3",
+    "is_large": true
   }
 },
 {
@@ -56,7 +62,9 @@
   "fields": {
     "name": "Центральный остров",
     "area": 36.0,
-    "stand_type": "Остров"
+    "stand_type": "Остров",
+    "slug": "tsentralnyi-ostrov-4",
+    "is_large": false
   }
 },
 {
@@ -66,7 +74,7 @@
     "stand": 1,
     "user": 1,
     "booking_date": "2026-10-15",
-    "is_cancelled": false
+    "status": "completed"
   }
 },
 {
@@ -76,7 +84,7 @@
     "stand": 3,
     "user": 2,
     "booking_date": "2026-10-15",
-    "is_cancelled": false
+    "status": "active"
   }
 },
 {
@@ -86,7 +94,7 @@
     "stand": 1,
     "user": 3,
     "booking_date": "2026-10-20",
-    "is_cancelled": true
+    "status": "cancelled"
   }
 },
 {
@@ -96,7 +104,7 @@
     "stand": 1,
     "user": 2,
     "booking_date": "2026-10-22",
-    "is_cancelled": false
+    "status": "active"
   }
 },
 {
@@ -106,7 +114,7 @@
     "stand": 3,
     "user": 3,
     "booking_date": "2026-10-25",
-    "is_cancelled": false
+    "status": "active"
   }
 },
 {
@@ -116,7 +124,7 @@
     "stand": 2,
     "user": 1,
     "booking_date": "2026-11-05",
-    "is_cancelled": false
+    "status": "active"
   }
 },
 {
@@ -126,7 +134,7 @@
     "stand": 4,
     "user": 2,
     "booking_date": "2026-11-05",
-    "is_cancelled": false
+    "status": "active"
   }
 },
 {
@@ -136,7 +144,7 @@
     "stand": 2,
     "user": 3,
     "booking_date": "2026-11-12",
-    "is_cancelled": false
+    "status": "active"
   }
 },
 {
@@ -146,7 +154,7 @@
     "stand": 1,
     "user": 1,
     "booking_date": "2026-11-18",
-    "is_cancelled": false
+    "status": "active"
   }
 }
 ]

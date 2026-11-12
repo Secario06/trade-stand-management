@@ -1,6 +1,7 @@
 import math
 from datetime import date
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
 
 from bookings.models import Booking
@@ -16,10 +17,20 @@ def _parse_date(value):
         return None
 
 
+# Допустимые поля сортировки списка стендов. Произвольные значения
+# из URL в order_by() не передаются.
+SORT_FIELDS = {
+    "name": "name",
+    "area": "area",
+}
+
+
 def stands(request):
-    """Страница /stands/: список стендов с поиском и фильтром по площади."""
+    """Страница /stands/: список стендов с поиском, фильтром и сортировкой."""
     query = request.GET.get("q", "").strip()
     raw_area = request.GET.get("min_area", "").strip()
+    sort = request.GET.get("sort", "name")
+    direction = request.GET.get("direction", "asc")
 
     min_area = None
     error = ""
@@ -34,26 +45,42 @@ def stands(request):
 
     stands_list = Stand.objects.all()
     if query:
-        # Поиск по части названия без учёта регистра.
-        stands_list = stands_list.filter(name__icontains=query)
+        # Поиск по части названия без учёта регистра; числовой запрос
+        # дополнительно сравнивается с площадью стенда.
+        condition = Q(name__icontains=query)
+        if query.replace(",", ".").replace(".", "", 1).isdigit():
+            condition |= Q(area=float(query.replace(",", ".")))
+        stands_list = stands_list.filter(condition)
     if min_area is not None:
         # Площадь не меньше заданной.
         stands_list = stands_list.filter(area__gte=min_area)
-    stands_list = stands_list.order_by("name")
+
+    # Поле сортировки выбирается из словаря, направление – из двух
+    # допустимых значений; pk делает порядок стабильным.
+    if sort not in SORT_FIELDS:
+        sort = "name"
+    if direction not in ("asc", "desc"):
+        direction = "asc"
+    sort_field = SORT_FIELDS[sort]
+    if direction == "desc":
+        sort_field = f"-{sort_field}"
+    stands_list = stands_list.order_by(sort_field, "pk")
 
     context = {
         "stands": stands_list,
         "query": query,
         "min_area": raw_area,
+        "sort": sort,
+        "direction": direction,
         "error": error,
     }
     return render(request, "stands/stand_list.html", context)
 
 
-def stand_detail(request, stand_id):
-    """Страница /stands/<id>/: информация о стенде и его доступность."""
-    # Если стенда нет, Django вернёт ответ 404.
-    stand = get_object_or_404(Stand, pk=stand_id)
+def stand_detail(request, slug):
+    """Страница /stands/<slug>/: информация о стенде и его доступность."""
+    # Поиск по slug; если стенда нет, Django вернёт ответ 404.
+    stand = get_object_or_404(Stand, slug=slug)
 
     # Дата проверки передаётся GET-параметром ?date=ГГГГ-ММ-ДД.
     requested = request.GET.get("date", "")
@@ -87,12 +114,15 @@ def available_stands(request):
     free_stands = []
     if check_date is not None:
         # Идентификаторы стендов с активной бронью на эту дату.
-        booked_stand_ids = Booking.objects.filter(
-            booking_date=check_date,
-            is_cancelled=False,
-        ).values_list("stand_id", flat=True)
+        booked_stand_ids = (
+            Booking.objects
+            .active()
+            .for_date(check_date)
+            .values_list("stand_id", flat=True)
+        )
 
-        # Исключаем занятые стенды; отменённые брони не блокируют.
+        # Исключаем занятые стенды; отменённые и завершённые
+        # бронирования стенд не блокируют.
         free_stands = Stand.objects.exclude(
             pk__in=booked_stand_ids,
         ).order_by("name")

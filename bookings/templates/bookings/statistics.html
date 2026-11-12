@@ -38,6 +38,20 @@
         </div>
     </div>
 
+    <h2 class="h4">Бронирования по статусам</h2>
+    <ul class="list-group mb-4">
+        {% for item in by_status %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ item.label }}</span>
+                <span class="badge bg-primary">{{ item.count }}</span>
+            </li>
+        {% endfor %}
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>Всего бронирований</strong>
+            <strong>{{ totals.total_bookings }}</strong>
+        </li>
+    </ul>
+
     <h2 class="h4">Бронирования по стендам</h2>
     <ul class="list-group mb-4">
         {% for item in by_stand %}
