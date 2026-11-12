@@ -1,4 +1,11 @@
 <article class="card stand-card mb-3">
+    {% if stand.image %}
+        <img
+            src="{{ stand.image.url }}"
+            alt="{{ stand.name }}"
+            class="card-img-top stand-image"
+        >
+    {% endif %}
     <div class="card-body">
         <h2 class="card-title h4">
             {{ stand.name|default:"Без названия" }}

@@ -38,7 +38,9 @@ class StandAdmin(admin.ModelAdmin):
     ordering = ("name",)
     list_per_page = 20
 
-    fields = ("id", "name", "stand_type", "area", "is_large", "slug")
+    fields = (
+        "id", "name", "stand_type", "area", "image", "is_large", "slug",
+    )
     # Идентификатор, slug и вычисляемое поле только для чтения.
     readonly_fields = ("id", "slug", "is_large")
 

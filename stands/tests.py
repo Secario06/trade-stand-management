@@ -1,12 +1,20 @@
+import tempfile
 from datetime import date
+from io import BytesIO
+from pathlib import Path
+from unittest.mock import patch
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
-from django.test import TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from bookings.models import Booking
+from stands.forms import StandForm
 from stands.models import Stand
 
 
@@ -402,3 +410,199 @@ class AvailableStandsViewTests(TestCase):
         self.assertContains(
             response, "На выбранную дату свободных стендов нет."
         )
+
+
+def make_image(name="photo.png", size=(20, 20)):
+    """Создать в памяти настоящее PNG-изображение для загрузки."""
+    buffer = BytesIO()
+    Image.new("RGB", size, "orange").save(buffer, format="PNG")
+    return SimpleUploadedFile(
+        name, buffer.getvalue(), content_type="image/png"
+    )
+
+
+class StandFormTests(TestCase):
+    def test_form_fields_and_widgets(self):
+        form = StandForm()
+        self.assertEqual(
+            list(form.fields), ["name", "stand_type", "area", "image"]
+        )
+        self.assertEqual(form.fields["image"].label, "Изображение")
+        self.assertEqual(
+            form.fields["image"].widget.attrs["accept"], "image/*"
+        )
+
+    def test_image_is_optional(self):
+        form = StandForm(
+            {"name": "Новый", "stand_type": "Остров", "area": "12.5"}
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_not_an_image_is_rejected(self):
+        fake = SimpleUploadedFile(
+            "fake.png", b"not an image", content_type="image/png"
+        )
+        form = StandForm(
+            {"name": "Новый", "stand_type": "Остров", "area": "12.5"},
+            {"image": fake},
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("image", form.errors)
+
+    def test_too_large_image_is_rejected(self):
+        with patch("stands.forms.MAX_IMAGE_SIZE", 10):
+            form = StandForm(
+                {"name": "Новый", "stand_type": "Остров", "area": "12.5"},
+                {"image": make_image()},
+            )
+            self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors["image"],
+            ["Размер изображения не должен превышать 2 МБ."],
+        )
+
+    def test_area_must_be_positive(self):
+        form = StandForm(
+            {"name": "Новый", "stand_type": "Остров", "area": "0"}
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("area", form.errors)
+
+
+class StandImageUploadTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def setUp(self):
+        # Загруженные файлы попадают во временный каталог.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        override = override_settings(MEDIA_ROOT=tmp.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.media_root = Path(tmp.name)
+
+    def test_settings(self):
+        self.assertEqual(settings.MEDIA_URL, "/media/")
+
+    def test_create_form_page(self):
+        response = self.client.get("/stands/create/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "stands/stand_form.html")
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        self.assertContains(response, "csrfmiddlewaretoken")
+
+    def test_create_stand_with_image(self):
+        response = self.client.post(
+            "/stands/create/",
+            {
+                "name": "Стенд с фото",
+                "stand_type": "Премиум",
+                "area": "30",
+                "image": make_image(),
+            },
+            follow=True,
+        )
+        stand = Stand.objects.get(name="Стенд с фото")
+        self.assertRedirects(response, stand.get_absolute_url())
+        self.assertTrue(stand.image.name.startswith("stands/"))
+        # Файл физически сохранён в каталоге media/stands/.
+        self.assertTrue((self.media_root / stand.image.name).is_file())
+        # Страница стенда показывает загруженное изображение.
+        self.assertContains(response, stand.image.url)
+        self.assertContains(response, "Стенд «Стенд с фото» создан.")
+
+    def test_create_stand_without_image(self):
+        response = self.client.post(
+            "/stands/create/",
+            {"name": "Без фото", "stand_type": "Остров", "area": "10"},
+            follow=True,
+        )
+        stand = Stand.objects.get(name="Без фото")
+        self.assertFalse(stand.image)
+        self.assertContains(response, "Изображение не загружено.")
+        # Slug формируется так же, как у стендов, созданных в админке.
+        self.assertEqual(stand.slug, f"bez-foto-{stand.pk}")
+
+    def test_invalid_form_is_shown_again(self):
+        before = Stand.objects.count()
+        response = self.client.post(
+            "/stands/create/",
+            {"name": "", "stand_type": "Остров", "area": "-5"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Обязательное поле.")
+        self.assertEqual(Stand.objects.count(), before)
+
+    def test_update_replaces_image(self):
+        stand = Stand.objects.get(pk=1)
+        url = f"/stands/{stand.slug}/edit/"
+        data = {
+            "name": stand.name,
+            "stand_type": stand.stand_type,
+            "area": stand.area,
+        }
+        self.client.post(url, {**data, "image": make_image("a.png")})
+        stand.refresh_from_db()
+        first = stand.image.name
+        self.client.post(url, {**data, "image": make_image("b.png")})
+        stand.refresh_from_db()
+        self.assertNotEqual(stand.image.name, first)
+        self.assertTrue((self.media_root / stand.image.name).is_file())
+        self.assertEqual(Stand.objects.filter(pk=1).count(), 1)
+
+    def test_update_keeps_image_if_no_new_file(self):
+        stand = Stand.objects.get(pk=1)
+        stand.image = make_image("keep.png")
+        stand.save()
+        name = stand.image.name
+        self.client.post(
+            f"/stands/{stand.slug}/edit/",
+            {
+                "name": "Павильон А (новый)",
+                "stand_type": stand.stand_type,
+                "area": stand.area,
+            },
+        )
+        stand.refresh_from_db()
+        self.assertEqual(stand.image.name, name)
+        self.assertEqual(stand.name, "Павильон А (новый)")
+        # slug не меняется при переименовании.
+        self.assertEqual(stand.slug, "pavilon-a-1")
+
+    def test_update_form_shows_current_values(self):
+        response = self.client.get("/stands/pavilon-a-1/edit/")
+        self.assertContains(response, "Редактирование стенда")
+        self.assertContains(response, 'value="Павильон А"')
+
+    def test_unknown_stand_returns_404(self):
+        self.assertEqual(
+            self.client.get("/stands/net-takogo-99/edit/").status_code, 404
+        )
+
+    def test_image_shown_in_list_and_detail(self):
+        stand = Stand.objects.get(pk=1)
+        stand.image = make_image("list.png")
+        stand.save()
+        self.assertContains(self.client.get("/stands/"), stand.image.url)
+        self.assertContains(
+            self.client.get(stand.get_absolute_url()), stand.image.url
+        )
+
+    def test_detail_without_image_shows_placeholder(self):
+        response = self.client.get("/stands/pavilon-b-2/")
+        self.assertContains(response, "Изображение не загружено.")
+
+    def test_create_route_is_not_taken_by_slug(self):
+        self.assertEqual(reverse("stands:create"), "/stands/create/")
+        self.assertEqual(
+            reverse("stands:update", kwargs={"slug": "pavilon-a-1"}),
+            "/stands/pavilon-a-1/edit/",
+        )
+
+    def test_post_without_csrf_token_is_forbidden(self):
+        client = Client(enforce_csrf_checks=True)
+        response = client.post(
+            "/stands/create/",
+            {"name": "X", "stand_type": "Остров", "area": "10"},
+        )
+        self.assertEqual(response.status_code, 403)

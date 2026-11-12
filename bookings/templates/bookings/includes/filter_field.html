@@ -1,0 +1,7 @@
+<div class="col-md-3 filter-field">
+    {{ field.label_tag }}
+    {{ field }}
+    {% for error in field.errors %}
+        <div class="form-error">{{ error }}</div>
+    {% endfor %}
+</div>

@@ -2,10 +2,12 @@ import math
 from datetime import date
 
 from django.db.models import Q
-from django.shortcuts import get_object_or_404, render
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect, render
 
 from bookings.models import Booking
 from models.bookings import get_booking_status
+from stands.forms import StandForm
 from stands.models import Stand
 
 
@@ -133,3 +135,32 @@ def available_stands(request):
         "invalid_date": check_date is None and bool(requested),
     }
     return render(request, "stands/available.html", context)
+
+
+def stand_create(request):
+    """Страница /stands/create/: создание стенда с изображением."""
+    if request.method == "POST":
+        # Кроме полей формы передаются загруженные файлы (request.FILES).
+        form = StandForm(request.POST, request.FILES)
+        if form.is_valid():
+            stand = form.save()
+            messages.success(request, f"Стенд «{stand.name}» создан.")
+            return redirect(stand)
+    else:
+        form = StandForm()
+    return render(request, "stands/stand_form.html", {"form": form})
+
+
+def stand_update(request, slug):
+    """Страница /stands/<slug>/edit/: редактирование стенда."""
+    stand = get_object_or_404(Stand, slug=slug)
+    if request.method == "POST":
+        form = StandForm(request.POST, request.FILES, instance=stand)
+        if form.is_valid():
+            stand = form.save()
+            messages.success(request, f"Стенд «{stand.name}» изменён.")
+            return redirect(stand)
+    else:
+        form = StandForm(instance=stand)
+    context = {"form": form, "stand": stand}
+    return render(request, "stands/stand_form.html", context)

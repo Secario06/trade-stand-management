@@ -5,7 +5,12 @@
 {% endblock %}
 
 {% block content %}
-    <h1>Стенды</h1>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">Стенды</h1>
+        <a href="{% url 'stands:create' %}" class="btn btn-primary">
+            Добавить стенд
+        </a>
+    </div>
 
     <form method="get" class="row g-2 mb-3">
         <div class="col-sm-5">

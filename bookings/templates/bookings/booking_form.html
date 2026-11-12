@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if booking %}Редактирование бронирования{% else %}Создание бронирования{% endif %}
+    – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    {% if booking %}
+        <h1 class="mb-3">Редактирование бронирования №{{ booking.pk }}</h1>
+    {% else %}
+        <h1 class="mb-3">Создание бронирования</h1>
+    {% endif %}
+
+    <form method="post" class="booking-form">
+        {# Токен защищает POST-запрос от CSRF-атак. #}
+        {% csrf_token %}
+
+        {# Общие ошибки формы (например, стенд уже занят). #}
+        {% for error in form.non_field_errors %}
+            <div class="alert alert-danger">{{ error }}</div>
+        {% endfor %}
+
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+                {% for error in field.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">
+            {% if booking %}Сохранить изменения{% else %}Создать бронирование{% endif %}
+        </button>
+        <a href="{% url 'bookings:bookings' %}" class="btn btn-outline-secondary">
+            Отмена
+        </a>
+    </form>
+{% endblock %}

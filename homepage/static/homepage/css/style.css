@@ -33,3 +33,18 @@ footer {
     border-top: 1px solid #ddd;
     padding-top: 1rem;
 }
+
+.form-error {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.booking-form {
+    max-width: 520px;
+}
+
+.stand-image {
+    max-height: 280px;
+    object-fit: cover;
+}

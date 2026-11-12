@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if stand %}Редактирование стенда{% else %}Новый стенд{% endif %}
+    – Торговые стенды
+{% endblock %}
+
+{% block content %}
+    {% if stand %}
+        <h1 class="mb-3">Редактирование стенда «{{ stand.name }}»</h1>
+    {% else %}
+        <h1 class="mb-3">Новый стенд</h1>
+    {% endif %}
+
+    {# enctype нужен, чтобы браузер передал файл изображения. #}
+    <form method="post" enctype="multipart/form-data" class="booking-form">
+        {% csrf_token %}
+
+        {% for error in form.non_field_errors %}
+            <div class="alert alert-danger">{{ error }}</div>
+        {% endfor %}
+
+        {% for field in form %}
+            <div class="mb-3">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+                {% for error in field.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">
+            {% if stand %}Сохранить изменения{% else %}Создать стенд{% endif %}
+        </button>
+        <a href="{% url 'stands:list' %}" class="btn btn-outline-secondary">
+            Отмена
+        </a>
+    </form>
+{% endblock %}

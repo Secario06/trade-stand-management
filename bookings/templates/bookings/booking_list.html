@@ -5,112 +5,34 @@
 {% endblock %}
 
 {% block content %}
-    <h1>Бронирования</h1>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">Бронирования</h1>
+        <a href="{% url 'bookings:booking_create' %}" class="btn btn-primary">
+            Создать бронирование
+        </a>
+    </div>
+
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
 
     <form method="get" class="mb-4">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label for="q" class="form-label">Поиск</label>
-                <input
-                    type="text"
-                    id="q"
-                    name="q"
-                    class="form-control"
-                    placeholder="Стенд, арендатор, email"
-                    value="{{ search }}"
-                >
-            </div>
-            <div class="col-md-3">
-                <label for="date" class="form-label">Дата бронирования</label>
-                <input
-                    type="date"
-                    id="date"
-                    name="date"
-                    class="form-control"
-                    value="{{ booking_date }}"
-                >
-            </div>
-            <div class="col-md-3">
-                <label for="stand" class="form-label">Стенд</label>
-                <select id="stand" name="stand" class="form-select">
-                    <option value="">Все стенды</option>
-                    {% for stand in stands %}
-                        <option
-                            value="{{ stand.pk }}"
-                            {% if selected_stand == stand.pk|stringformat:"s" %}selected{% endif %}
-                        >
-                            {{ stand.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label for="user" class="form-label">Арендатор</label>
-                <select id="user" name="user" class="form-select">
-                    <option value="">Все арендаторы</option>
-                    {% for user in users %}
-                        <option
-                            value="{{ user.pk }}"
-                            {% if selected_user == user.pk|stringformat:"s" %}selected{% endif %}
-                        >
-                            {{ user.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label for="type" class="form-label">Тип стенда</label>
-                <select id="type" name="type" class="form-select">
-                    <option value="">Любой тип</option>
-                    {% for value, label in stand_types %}
-                        <option
-                            value="{{ value }}"
-                            {% if selected_type == value %}selected{% endif %}
-                        >
-                            {{ label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label for="sort" class="form-label">Сортировать по</label>
-                <select id="sort" name="sort" class="form-select">
-                    <option value="date" {% if sort == "date" %}selected{% endif %}>
-                        Дате
-                    </option>
-                    <option value="stand" {% if sort == "stand" %}selected{% endif %}>
-                        Стенду
-                    </option>
-                    <option value="user" {% if sort == "user" %}selected{% endif %}>
-                        Арендатору
-                    </option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label for="status" class="form-label">Статус</label>
-                <select id="status" name="status" class="form-select">
-                    {% for value, label in status_choices %}
-                        <option
-                            value="{{ value }}"
-                            {% if selected_status == value %}selected{% endif %}
-                        >
-                            {{ label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <button type="submit" class="btn btn-primary">Найти</button>
-                <a href="{% url 'bookings:bookings' %}" class="btn btn-outline-secondary">
+        <div class="row g-3 align-items-start">
+            {% include "bookings/includes/filter_field.html" with field=form.q %}
+            {% include "bookings/includes/filter_field.html" with field=form.date %}
+            {% include "bookings/includes/filter_field.html" with field=form.stand %}
+            {% include "bookings/includes/filter_field.html" with field=form.user %}
+            {% include "bookings/includes/filter_field.html" with field=form.type %}
+            {% include "bookings/includes/filter_field.html" with field=form.sort %}
+            {% include "bookings/includes/filter_field.html" with field=form.status %}
+            <div class="col-md-3 pt-md-4">
+                <button type="submit" class="btn btn-primary mt-md-2">Найти</button>
+                <a href="{% url 'bookings:bookings' %}" class="btn btn-outline-secondary mt-md-2">
                     Сбросить
                 </a>
             </div>
         </div>
     </form>
-
-    {% if error %}
-        <div class="alert alert-warning">{{ error }}</div>
-    {% endif %}
 
     <p>
         Найдено бронирований: {{ total }}.
@@ -118,7 +40,7 @@
 
     <ul class="list-group">
         {% for booking in bookings %}
-            <li class="list-group-item d-flex justify-content-between">
+            <li class="list-group-item d-flex justify-content-between align-items-center">
                 <span>
                     <a href="{% url 'bookings:detail' booking.id %}">
                         Бронирование №{{ booking.id }}
@@ -127,7 +49,23 @@
                     {{ booking.booking_date|date:"d.m.Y" }},
                     {{ booking.user_name }}
                 </span>
-                {% include "bookings/includes/booking_status.html" %}
+                <span class="d-flex align-items-center gap-2">
+                    {% include "bookings/includes/booking_status.html" %}
+                    {% if booking.status == BookingStatus.ACTIVE %}
+                        <a href="{% url 'bookings:booking_update' booking.id %}"
+                           class="btn btn-sm btn-warning">
+                            Редактировать
+                        </a>
+                        <form method="post"
+                              action="{% url 'bookings:booking_cancel' booking.id %}"
+                              class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-danger">
+                                Отменить
+                            </button>
+                        </form>
+                    {% endif %}
+                </span>
             </li>
         {% empty %}
             <li class="list-group-item">Бронирования не найдены.</li>

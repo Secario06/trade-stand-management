@@ -8,6 +8,8 @@ app_name = "stands"
 urlpatterns = [
     path("", views.stands, name="list"),
     path("available/", views.available_stands, name="available"),
+    path("create/", views.stand_create, name="create"),
     # Страница стенда открывается по текстовому идентификатору (slug).
     path("<slug:slug>/", views.stand_detail, name="detail"),
+    path("<slug:slug>/edit/", views.stand_update, name="update"),
 ]

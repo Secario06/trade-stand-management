@@ -17,6 +17,16 @@
                 {{ stand.name|default:"Без названия" }}
             </h1>
 
+            {% if stand.image %}
+                <img
+                    src="{{ stand.image.url }}"
+                    alt="{{ stand.name }}"
+                    class="img-fluid rounded mb-3 stand-image"
+                >
+            {% else %}
+                <p class="text-muted">Изображение не загружено.</p>
+            {% endif %}
+
             <p class="card-text">
                 <strong>ID:</strong> {{ stand.pk }}
             </p>
@@ -86,5 +96,11 @@
         class="btn btn-outline-secondary mt-3"
     >
         ← к списку стендов
+    </a>
+    <a
+        href="{% url 'stands:update' stand.slug %}"
+        class="btn btn-warning mt-3"
+    >
+        Редактировать стенд
     </a>
 {% endblock %}

@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
+from bookings.forms import BookingFilterForm, BookingForm
 from bookings.models import Booking, BookingManager, BookingQuerySet
 
 
@@ -262,7 +264,13 @@ class BookingListViewTests(TestCase):
     def test_invalid_filter_values_do_not_break_page(self):
         response = self.client.get("/bookings/?stand=abc&user=--&date=oops")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Укажите корректную дату.")
+        self.assertContains(
+            response, "Проверьте введённые значения фильтров."
+        )
+        # Ошибка отображается у каждого некорректного поля.
+        self.assertContains(response, "Введите правильную дату.")
+        self.assertContains(response, "Выберите корректный вариант.")
+        # Некорректные фильтры не применяются, показаны активные брони.
         self.assertEqual(response.context["total"], 7)
 
     def test_empty_result(self):
@@ -465,3 +473,520 @@ class NavigationTests(TestCase):
         self.assertContains(response, 'href="/bookings/statistics/"')
         response = self.client.get("/stands/")
         self.assertContains(response, 'href="/stands/available/"')
+
+
+class BookingFilterFormTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def test_form_is_plain_form_not_model_form(self):
+        self.assertFalse(hasattr(BookingFilterForm, "_meta"))
+        self.assertTrue(hasattr(BookingForm, "_meta"))
+
+    def test_empty_request_gives_unbound_form_without_errors(self):
+        response = self.client.get("/bookings/")
+        form = response.context["form"]
+        self.assertFalse(form.is_bound)
+        self.assertIsNone(response.context["error"])
+        self.assertNotContains(response, 'class="form-error"')
+
+    def test_valid_data_gives_cleaned_values(self):
+        form = BookingFilterForm(
+            {
+                "date": "2026-10-15",
+                "stand": "3",
+                "user": "2",
+                "type": "Премиум",
+                "status": "all",
+                "sort": "stand",
+            }
+        )
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data["date"], date(2026, 10, 15))
+        self.assertEqual(form.cleaned_data["stand"].pk, 3)
+        self.assertEqual(form.cleaned_data["user"].pk, 2)
+        self.assertEqual(form.cleaned_data["sort"], "stand")
+
+    def test_invalid_values_are_rejected(self):
+        for field, value in (
+            ("date", "не_дата"),
+            ("stand", "999999"),
+            ("user", "999999"),
+            ("type", "Неизвестный"),
+            ("status", "hack"),
+            ("sort", "unknown"),
+        ):
+            form = BookingFilterForm({field: value})
+            self.assertFalse(form.is_valid(), field)
+            self.assertIn(field, form.errors)
+
+    def test_invalid_form_shows_message_and_default_list(self):
+        for query in (
+            "date=не_дата",
+            "stand=999999",
+            "sort=unknown",
+            "status=hack",
+        ):
+            response = self.client.get(f"/bookings/?{query}")
+            self.assertEqual(response.status_code, 200, query)
+            self.assertContains(
+                response, "Проверьте введённые значения фильтров."
+            )
+            self.assertEqual(response.context["total"], 7, query)
+            self.assertEqual(response.context["sort"], "date", query)
+
+    def test_selected_values_are_kept_in_form(self):
+        response = self.client.get(
+            "/bookings/?stand=1&date=2026-10-22&sort=user&status=all"
+        )
+        self.assertContains(response, 'value="2026-10-22"')
+        form = response.context["form"]
+        self.assertEqual(form["stand"].value(), "1")
+        self.assertEqual(form["sort"].value(), "user")
+
+
+class BookingFormTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def setUp(self):
+        self.today = timezone.localdate()
+        self.future = self.today + timedelta(days=30)
+
+    def data(self, booking_date, stand=1, user=1):
+        return {"stand": stand, "user": user, "booking_date": booking_date}
+
+    def test_form_fields_exclude_status(self):
+        self.assertEqual(
+            list(BookingForm().fields), ["stand", "user", "booking_date"]
+        )
+
+    def test_labels_help_texts_and_widgets(self):
+        form = BookingForm()
+        self.assertEqual(form.fields["stand"].label, "Стенд")
+        self.assertEqual(
+            form.fields["booking_date"].label, "Дата бронирования"
+        )
+        self.assertTrue(form.fields["booking_date"].help_text)
+        widget = form.fields["booking_date"].widget
+        self.assertEqual(widget.input_type, "date")
+        self.assertEqual(widget.attrs["class"], "form-control")
+
+    def test_valid_data(self):
+        form = BookingForm(self.data(self.future.isoformat()))
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_past_date_is_rejected(self):
+        yesterday = self.today - timedelta(days=1)
+        form = BookingForm(self.data(yesterday.isoformat()))
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors["booking_date"],
+            ["Нельзя создать бронирование на прошедшую дату."],
+        )
+
+    def test_today_is_allowed(self):
+        form = BookingForm(self.data(self.today.isoformat()))
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_required_fields(self):
+        form = BookingForm({})
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            set(form.errors), {"stand", "user", "booking_date"}
+        )
+
+    def test_unchanged_past_date_of_existing_booking_is_allowed(self):
+        # Бронирование №2 находится в прошлом: смена арендатора допустима.
+        booking = Booking.objects.get(pk=2)
+        form = BookingForm(
+            self.data(booking.booking_date.isoformat(), stand=3, user=1),
+            instance=booking,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_changing_date_to_the_past_is_rejected_on_edit(self):
+        booking = Booking.objects.get(pk=9)
+        form = BookingForm(
+            self.data("2020-01-01", stand=1, user=1), instance=booking
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("booking_date", form.errors)
+
+
+class BookingCreateViewTests(TestCase):
+    fixtures = ["tradestands.json"]
+    url = "/bookings/create/"
+
+    def setUp(self):
+        self.today = timezone.localdate()
+        self.future = self.today + timedelta(days=60)
+
+    def post(self, booking_date, stand=4, user=1, **extra):
+        return self.client.post(
+            self.url,
+            {"stand": stand, "user": user, "booking_date": booking_date},
+            **extra,
+        )
+
+    def test_get_shows_empty_form_with_today(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "bookings/booking_form.html")
+        self.assertFalse(response.context["form"].is_bound)
+        self.assertContains(response, "Создание бронирования")
+        self.assertContains(response, "csrfmiddlewaretoken")
+        self.assertContains(response, f'value="{self.today.isoformat()}"')
+        self.assertContains(response, "Выберите стенд для бронирования.")
+
+    def test_valid_post_creates_active_booking_and_redirects(self):
+        before = Booking.objects.count()
+        response = self.post(self.future.isoformat(), follow=True)
+        self.assertRedirects(response, "/bookings/")
+        self.assertEqual(Booking.objects.count(), before + 1)
+        booking = Booking.objects.latest("pk")
+        self.assertEqual(booking.stand_id, 4)
+        self.assertEqual(booking.user_id, 1)
+        self.assertEqual(booking.booking_date, self.future)
+        self.assertEqual(booking.status, Booking.Status.ACTIVE)
+        self.assertContains(response, f"Бронирование №{booking.pk} создано.")
+
+    def test_new_booking_appears_in_list(self):
+        self.post(self.future.isoformat())
+        response = self.client.get(
+            f"/bookings/?date={self.future.isoformat()}"
+        )
+        self.assertEqual(response.context["total"], 1)
+
+    def test_past_date_shows_field_error_and_saves_nothing(self):
+        before = Booking.objects.count()
+        yesterday = (self.today - timedelta(days=1)).isoformat()
+        response = self.post(yesterday)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Нельзя создать бронирование на прошедшую дату."
+        )
+        self.assertEqual(Booking.objects.count(), before)
+        # Введённые значения сохраняются при повторном показе формы.
+        self.assertContains(response, f'value="{yesterday}"')
+
+    def test_today_is_allowed(self):
+        response = self.post(self.today.isoformat())
+        self.assertRedirects(response, "/bookings/")
+
+    def test_missing_field_shows_error(self):
+        response = self.client.post(self.url, {"stand": 4, "user": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Обязательное поле.")
+
+    def test_invalid_date_shows_error(self):
+        response = self.post("не_дата")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Введите правильную дату.")
+
+    def test_unknown_stand_is_rejected(self):
+        before = Booking.objects.count()
+        response = self.post(self.future.isoformat(), stand=999)
+        self.assertContains(response, "Выберите корректный вариант.")
+        self.assertEqual(Booking.objects.count(), before)
+
+    def test_busy_stand_shows_non_field_error(self):
+        Booking.objects.create(
+            stand_id=4, user_id=2, booking_date=self.future
+        )
+        before = Booking.objects.count()
+        response = self.post(self.future.isoformat())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Выбранный стенд уже забронирован на эту дату."
+        )
+        self.assertEqual(
+            response.context["form"].non_field_errors(),
+            ["Выбранный стенд уже забронирован на эту дату."],
+        )
+        self.assertEqual(Booking.objects.count(), before)
+
+    def test_cancelled_booking_does_not_block_stand(self):
+        Booking.objects.create(
+            stand_id=4,
+            user_id=2,
+            booking_date=self.future,
+            status=Booking.Status.CANCELLED,
+        )
+        response = self.post(self.future.isoformat())
+        self.assertRedirects(response, "/bookings/")
+        self.assertEqual(
+            Booking.objects.active()
+            .filter(stand_id=4, booking_date=self.future)
+            .count(),
+            1,
+        )
+
+    def test_completed_booking_does_not_block_stand(self):
+        Booking.objects.create(
+            stand_id=4,
+            user_id=2,
+            booking_date=self.future,
+            status=Booking.Status.COMPLETED,
+        )
+        response = self.post(self.future.isoformat())
+        self.assertRedirects(response, "/bookings/")
+
+    def test_status_cannot_be_set_through_form(self):
+        self.client.post(
+            self.url,
+            {
+                "stand": 4,
+                "user": 1,
+                "booking_date": self.future.isoformat(),
+                "status": "completed",
+            },
+        )
+        self.assertEqual(
+            Booking.objects.latest("pk").status, Booking.Status.ACTIVE
+        )
+
+    def test_released_stand_can_be_booked_after_cancel(self):
+        booking = Booking.objects.create(
+            stand_id=4, user_id=2, booking_date=self.future
+        )
+        self.assertContains(
+            self.post(self.future.isoformat()), "уже забронирован"
+        )
+        booking.cancel()
+        response = self.post(self.future.isoformat())
+        self.assertRedirects(response, "/bookings/")
+
+
+class BookingUpdateViewTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def setUp(self):
+        self.today = timezone.localdate()
+        self.future = self.today + timedelta(days=60)
+        self.booking = Booking.objects.create(
+            stand_id=4, user_id=1, booking_date=self.future
+        )
+        self.url = f"/bookings/{self.booking.pk}/edit/"
+
+    def post(self, booking_date=None, stand=4, user=1):
+        booking_date = booking_date or self.future
+        return self.client.post(
+            self.url,
+            {
+                "stand": stand,
+                "user": user,
+                "booking_date": booking_date.isoformat(),
+            },
+        )
+
+    def test_get_shows_form_with_current_values(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "bookings/booking_form.html")
+        self.assertContains(
+            response, f"Редактирование бронирования №{self.booking.pk}"
+        )
+        self.assertContains(response, "Сохранить изменения")
+        self.assertContains(response, f'value="{self.future.isoformat()}"')
+        form = response.context["form"]
+        self.assertEqual(form.instance, self.booking)
+        self.assertEqual(form["stand"].value(), 4)
+
+    def test_change_date_updates_same_record(self):
+        before = Booking.objects.count()
+        new_date = self.future + timedelta(days=7)
+        response = self.post(new_date)
+        self.assertRedirects(response, "/bookings/")
+        self.assertEqual(Booking.objects.count(), before)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.booking_date, new_date)
+
+    def test_change_stand_updates_same_record(self):
+        response = self.post(stand=2)
+        self.assertRedirects(response, "/bookings/")
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.stand_id, 2)
+
+    def test_save_without_changes_does_not_conflict_with_itself(self):
+        before = Booking.objects.count()
+        response = self.post()
+        self.assertRedirects(response, "/bookings/")
+        self.assertEqual(Booking.objects.count(), before)
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.status, Booking.Status.ACTIVE)
+
+    def test_past_date_is_rejected(self):
+        response = self.post(self.today - timedelta(days=1))
+        self.assertContains(
+            response, "Нельзя создать бронирование на прошедшую дату."
+        )
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.booking_date, self.future)
+
+    def test_conflict_with_other_active_booking_is_rejected(self):
+        other = Booking.objects.create(
+            stand_id=2, user_id=2, booking_date=self.future
+        )
+        response = self.post(stand=2)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Выбранный стенд уже забронирован на эту дату."
+        )
+        self.booking.refresh_from_db()
+        self.assertEqual(self.booking.stand_id, 4)
+        other.refresh_from_db()
+        self.assertEqual(other.stand_id, 2)
+
+    def test_cancelled_booking_of_other_user_does_not_conflict(self):
+        Booking.objects.create(
+            stand_id=2,
+            user_id=2,
+            booking_date=self.future,
+            status=Booking.Status.CANCELLED,
+        )
+        self.assertRedirects(self.post(stand=2), "/bookings/")
+
+    def test_unknown_booking_returns_404(self):
+        self.assertEqual(
+            self.client.get("/bookings/999999/edit/").status_code, 404
+        )
+        self.assertEqual(
+            self.client.post("/bookings/999999/edit/", {}).status_code, 404
+        )
+
+    def test_cancelled_and_completed_bookings_cannot_be_edited(self):
+        # №1 завершено, №3 отменено.
+        for pk in (1, 3):
+            self.assertEqual(
+                self.client.get(f"/bookings/{pk}/edit/").status_code, 404
+            )
+
+    def test_list_has_edit_links_for_active_only(self):
+        response = self.client.get("/bookings/")
+        self.assertContains(response, "/edit/")
+        cancelled = self.client.get("/bookings/?status=cancelled")
+        self.assertNotContains(cancelled, "/edit/")
+        self.assertNotContains(cancelled, "/cancel/")
+
+
+class BookingCancelViewTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def test_post_cancels_booking_and_keeps_record(self):
+        response = self.client.post("/bookings/2/cancel/", follow=True)
+        self.assertRedirects(response, "/bookings/")
+        booking = Booking.objects.get(pk=2)
+        self.assertEqual(booking.status, Booking.Status.CANCELLED)
+        self.assertContains(response, "Бронирование №2 отменено.")
+
+    def test_cancelled_booking_leaves_active_list(self):
+        self.client.post("/bookings/2/cancel/")
+        response = self.client.get("/bookings/")
+        ids = [row["id"] for row in response.context["bookings"]]
+        self.assertNotIn(2, ids)
+        cancelled = self.client.get("/bookings/?status=cancelled")
+        self.assertIn(
+            2, [row["id"] for row in cancelled.context["bookings"]]
+        )
+
+    def test_get_is_not_allowed(self):
+        response = self.client.get("/bookings/2/cancel/")
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(
+            Booking.objects.get(pk=2).status, Booking.Status.ACTIVE
+        )
+
+    def test_repeated_cancel_returns_404(self):
+        self.client.post("/bookings/2/cancel/")
+        self.assertEqual(
+            self.client.post("/bookings/2/cancel/").status_code, 404
+        )
+
+    def test_unknown_and_inactive_bookings_return_404(self):
+        for pk in (999999, 1, 3):
+            self.assertEqual(
+                self.client.post(f"/bookings/{pk}/cancel/").status_code,
+                404,
+                pk,
+            )
+
+    def test_cancel_releases_stand(self):
+        future = timezone.localdate() + timedelta(days=90)
+        booking = Booking.objects.create(
+            stand_id=4, user_id=1, booking_date=future
+        )
+        data = {"stand": 4, "user": 2, "booking_date": future.isoformat()}
+        busy = self.client.post("/bookings/create/", data)
+        self.assertEqual(busy.status_code, 200)
+        self.client.post(f"/bookings/{booking.pk}/cancel/")
+        free = self.client.post("/bookings/create/", data)
+        self.assertRedirects(free, "/bookings/")
+
+
+class CsrfProtectionTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def setUp(self):
+        # Клиент с включённой проверкой CSRF, как в браузере.
+        self.client = Client(enforce_csrf_checks=True)
+
+    def test_post_without_token_is_forbidden(self):
+        future = timezone.localdate() + timedelta(days=30)
+        response = self.client.post(
+            "/bookings/create/",
+            {"stand": 4, "user": 1, "booking_date": future.isoformat()},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            self.client.post("/bookings/2/cancel/").status_code, 403
+        )
+        self.assertEqual(
+            Booking.objects.get(pk=2).status, Booking.Status.ACTIVE
+        )
+
+    def test_forms_contain_csrf_token(self):
+        for url in ("/bookings/create/", "/bookings/2/edit/", "/bookings/"):
+            response = self.client.get(url)
+            self.assertContains(
+                response, "csrfmiddlewaretoken", msg_prefix=url
+            )
+
+    def test_post_with_token_is_accepted(self):
+        response = self.client.get("/bookings/create/")
+        token = response.cookies["csrftoken"].value
+        future = timezone.localdate() + timedelta(days=30)
+        response = self.client.post(
+            "/bookings/create/",
+            {
+                "stand": 4,
+                "user": 1,
+                "booking_date": future.isoformat(),
+                "csrfmiddlewaretoken": token,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+
+class FormNavigationTests(TestCase):
+    fixtures = ["tradestands.json"]
+
+    def test_named_urls(self):
+        self.assertEqual(
+            reverse("bookings:booking_create"), "/bookings/create/"
+        )
+        self.assertEqual(
+            reverse("bookings:booking_update", args=[5]),
+            "/bookings/5/edit/",
+        )
+        self.assertEqual(
+            reverse("bookings:booking_cancel", args=[5]),
+            "/bookings/5/cancel/",
+        )
+
+    def test_list_links_to_create_form(self):
+        response = self.client.get("/bookings/")
+        self.assertContains(response, 'href="/bookings/create/"')
+        self.assertContains(response, 'action="/bookings/2/cancel/"')
+
+    def test_existing_routes_still_work(self):
+        for url in ("/bookings/", "/bookings/1/", "/bookings/statistics/"):
+            self.assertEqual(self.client.get(url).status_code, 200, url)
