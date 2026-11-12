@@ -1,0 +1,152 @@
+[
+{
+  "model": "users.user",
+  "pk": 1,
+  "fields": {
+    "name": "Иван Петров",
+    "email": "ivan.petrov@example.com"
+  }
+},
+{
+  "model": "users.user",
+  "pk": 2,
+  "fields": {
+    "name": "ООО «Сладкий мир»",
+    "email": "sweet@example.com"
+  }
+},
+{
+  "model": "users.user",
+  "pk": 3,
+  "fields": {
+    "name": "Анна Смирнова",
+    "email": "anna.smirnova@example.com"
+  }
+},
+{
+  "model": "stands.stand",
+  "pk": 1,
+  "fields": {
+    "name": "Павильон А",
+    "area": 25.0,
+    "stand_type": "Стандарт"
+  }
+},
+{
+  "model": "stands.stand",
+  "pk": 2,
+  "fields": {
+    "name": "Павильон Б",
+    "area": 18.5,
+    "stand_type": "Стандарт"
+  }
+},
+{
+  "model": "stands.stand",
+  "pk": 3,
+  "fields": {
+    "name": "Премиум-зона",
+    "area": 50.0,
+    "stand_type": "Премиум"
+  }
+},
+{
+  "model": "stands.stand",
+  "pk": 4,
+  "fields": {
+    "name": "Центральный остров",
+    "area": 36.0,
+    "stand_type": "Остров"
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 1,
+  "fields": {
+    "stand": 1,
+    "user": 1,
+    "booking_date": "2026-10-15",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 2,
+  "fields": {
+    "stand": 3,
+    "user": 2,
+    "booking_date": "2026-10-15",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 3,
+  "fields": {
+    "stand": 1,
+    "user": 3,
+    "booking_date": "2026-10-20",
+    "is_cancelled": true
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 4,
+  "fields": {
+    "stand": 1,
+    "user": 2,
+    "booking_date": "2026-10-22",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 5,
+  "fields": {
+    "stand": 3,
+    "user": 3,
+    "booking_date": "2026-10-25",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 6,
+  "fields": {
+    "stand": 2,
+    "user": 1,
+    "booking_date": "2026-11-05",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 7,
+  "fields": {
+    "stand": 4,
+    "user": 2,
+    "booking_date": "2026-11-05",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 8,
+  "fields": {
+    "stand": 2,
+    "user": 3,
+    "booking_date": "2026-11-12",
+    "is_cancelled": false
+  }
+},
+{
+  "model": "bookings.booking",
+  "pk": 9,
+  "fields": {
+    "stand": 1,
+    "user": 1,
+    "booking_date": "2026-11-18",
+    "is_cancelled": false
+  }
+}
+]

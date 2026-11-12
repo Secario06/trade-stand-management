@@ -1,182 +1,176 @@
 # Система управления торговыми стендами
 
-Система учёта торговых стендов и их бронирования на Python с веб-интерфейсом на Django и базой данных SQLite.
+Система учёта торговых стендов и их бронирования на Python с веб-интерфейсом на Django. Доступ к данным выполняется через Django ORM, база данных – SQLite.
 
 ## 1. Назначение проекта
 
 Приложение для управления торговыми стендами и их бронированием. Проект позволяет хранить сведения о стендах, арендаторах и бронированиях, выполнять основные операции с этими объектами и просматривать информацию через веб-интерфейс Django.
 
-Проект развивается поэтапно: консольная версия (ПР3) дополнена веб-интерфейсом (ПР5), он переведён на шаблоны Django (ПР6), а данные перенесены из JSON в реляционную базу SQLite (ПР7).
+Проект развивался поэтапно: консольная версия (ПР3), веб-интерфейс на Django (ПР5), шаблоны (ПР6), база данных SQLite и SQL (ПР7). В ПР9 слой данных переведён с ручных SQL-запросов и `sqlite3` на Django ORM.
 
 ## 2. Используемые технологии
 
 - Python 3;
-- Django 5.2;
-- Django Template Language (DTL);
-- SQLite и стандартная библиотека `sqlite3` (SQL без Django ORM);
-- HTML5, CSS3, JavaScript;
-- Bootstrap 5.3 (через CDN);
-- JSON (исходные данные и консольная версия);
-- Git;
-- pytest;
-- flake8.
+- Django 5.2 (ORM, миграции, шаблоны);
+- SQLite (база Django `db.sqlite3`);
+- HTML5, CSS3, JavaScript, Bootstrap 5.3 (через CDN);
+- JSON (консольная версия), Git, pytest, flake8.
 
 ## 3. Предметная область
 
-В системе используются три основные сущности:
+Основные сущности: стенд, арендатор, бронирование. Арендатор может бронировать стенды на определённые даты. Один стенд не может иметь два активных бронирования на одну дату; отменённое бронирование стенд не блокирует.
 
-- Стенд (`Stand`) – идентификатор, название, площадь, тип;
-- Арендатор (`User`) – идентификатор, имя и email;
-- Бронирование (`Booking`) – идентификатор, стенд, арендатор, дата бронирования и признак отмены.
+## 4. Модели данных
 
-Для предметной области реализованы собственные Python-классы (пакет `models/`). Один стенд не может иметь два активных бронирования на одну дату; отменённое бронирование стенд не блокирует.
+Модели находятся в `models.py` соответствующих Django-приложений. Это отдельные классы Django, не путать с обычными классами консольной версии в пакете `models/`.
 
-## 4. Структура проекта
+| Модель | Приложение | Поля |
+|--------|------------|------|
+| `Stand` – стенд | `stands` | `name` (CharField), `area` (FloatField, > 0), `stand_type` (CharField с выбором: Стандарт, Премиум, Остров) |
+| `User` – арендатор | `users` | `name` (CharField), `email` (EmailField) |
+| `Booking` – бронирование | `bookings` | `stand` (ForeignKey), `user` (ForeignKey), `booking_date` (DateField), `is_cancelled` (BooleanField, по умолчанию `False`) |
+
+Первичные ключи `id` создаются Django автоматически. Модель `User` описывает арендатора предметной области и не является встроенной моделью аутентификации `django.contrib.auth`.
+
+### Связи между моделями
+
+- `Booking.stand` → `Stand`, `Booking.user` → `User` (связь «многие к одному»);
+- `on_delete=models.PROTECT`: нельзя удалить стенд или арендатора, на которых есть бронирования (сохраняется история);
+- `related_name="bookings"`: у стенда и арендатора доступно `stand.bookings.all()` и `user.bookings.all()`;
+- в таблице столбцы называются `stand_id` и `user_id` (`booking.stand_id`).
+
+### Методы и ограничения
+
+- `Stand.is_available_on(date)` – свободен ли стенд на дату (отменённые брони не учитываются);
+- `Booking.cancel()` – отмена бронирования с сохранением (`save(update_fields=["is_cancelled"])`);
+- `CheckConstraint`: площадь стенда больше нуля;
+- `UniqueConstraint` с условием `is_cancelled=False`: не более одного активного бронирования стенда на дату (правило предметной области, как в ПР7);
+- `Meta.ordering`, `verbose_name`, `__str__()` у всех моделей; модели зарегистрированы в админке.
+
+## 5. Миграции и база данных
+
+Структура базы управляется миграциями (`stands/migrations`, `users/migrations`, `bookings/migrations`), они хранятся в Git.
+
+```text
+python manage.py makemigrations     # создать миграции по моделям
+python manage.py showmigrations     # состояние миграций
+python manage.py sqlmigrate bookings 0001   # посмотреть SQL миграции
+python manage.py migrate            # применить миграции
+python manage.py makemigrations --check     # нет ли неучтённых изменений
+```
+
+Используются две базы:
+
+- `db.sqlite3` – **целевая** база Django (`DATABASES`), с ней работает ORM; в репозиторий не входит;
+- `data/tradestands.sqlite` – **исходная** база ПР7, остаётся без изменений и служит источником данных при переносе.
+
+Выбрана стратегия «новые таблицы, управляемые Django, и перенос данных»: прежние таблицы не подключались через `db_table`, миграции к ним не применялись.
+
+### Перенос данных
+
+1. Исследовать исходную базу: `python db/inspect_source_db.py` (таблицы, столбцы, число записей, целостность ссылок).
+2. Применить миграции: `python manage.py migrate`.
+3. Перенести данные: `python db/import_sqlite_to_orm.py`.
+
+Скрипт читает исходную базу только на чтение, переносит стенды и арендаторов, затем бронирования с сохранением идентификаторов и связей, преобразует строки дат в `date`, работает в одной транзакции (`transaction.atomic()`) и безопасен при повторном запуске (`update_or_create`). Перенесено: 4 стенда, 3 арендатора, 5 бронирований.
+
+### Fixture
+
+Для наполнения базы без исходной базы ПР7 есть fixture `fixtures/tradestands.json` (3 арендатора, 4 стенда, 9 бронирований; бронирования №6–9 добавлены через ORM для демонстрации пагинации):
+
+```text
+python manage.py loaddata tradestands.json
+python manage.py dumpdata users stands bookings --indent 2 --output fixtures/tradestands.json
+```
+
+## 6. Операции ORM
+
+Реализовано более 15 различных ORM-выражений.
+
+| Направление | Примеры в проекте |
+|-------------|-------------------|
+| Получение | `Stand.objects.all()`, `get_object_or_404(Stand, pk=…)`, `get_object_or_404(Booking.objects.select_related("stand", "user"), pk=…)` |
+| Фильтрация | `filter(area__gte=…)`; цепочка `filter(booking_date=…)`, `filter(stand_id=…)`, `filter(user_id=…)`; по связанному полю `filter(stand__stand_type=…)`; `exclude(is_cancelled=True)`; `Stand.objects.exclude(pk__in=…)` |
+| Поиск | `filter(name__icontains=…)`; поиск по нескольким полям связанных моделей через `Q(stand__name__icontains) \| Q(user__name__icontains) \| Q(user__email__icontains)` |
+| Сортировка | `order_by("name")`; `order_by(SORT_FIELDS[sort], "id")` (допустимые поля из словаря, в том числе `stand__name`, `user__name`); `order_by("-bookings_count", "name")` |
+| Связи | обратная связь `stand.bookings.select_related("user")`; `annotate(stand_name=F("stand__name"))` + `values()`; `values_list("stand_id", flat=True)` |
+| Агрегирование | `aggregate(Count, Min, Max, Avg, Sum)`; `annotate(bookings_count=Count("bookings", filter=Q(bookings__is_cancelled=False)))`; `values("stand_type").annotate(...)`; фильтр по агрегату `filter(bookings_count__gt=1)`; `.count()` |
+| Срез | `order_by("-pk")[:3]` |
+| Пагинация | `Paginator(bookings, 5).get_page(...)`, ссылки `{% querystring page=… %}` |
+| CRUD | `create()`, `save()`, `delete()`, `get_or_create()`, `update_or_create()` (shell, перенос данных, тесты) |
+
+Поиск по кириллице: встроенный `LIKE` в SQLite не учитывает регистр только для латиницы, поэтому `tradestands/sqlite_unicode.py` подключает Unicode-aware функцию `like()` (регистрируется в `stands/apps.py`), и `icontains` находит «павильон» в названии «Павильон А».
+
+## 7. Веб-интерфейс
+
+| URL | Имя маршрута | Данные |
+|-----|--------------|--------|
+| `/` | `homepage:index` | – |
+| `/stands/` | `stands:list` | стенды; поиск `?q=`, площадь `?min_area=` |
+| `/stands/<id>/` | `stands:detail` | стенд, занятость на дату `?date=`, история бронирований |
+| `/stands/available/` | `stands:available` | стенды, свободные на дату `?date=` |
+| `/bookings/` | `bookings:bookings` | бронирования: фильтры `date`, `stand`, `user`, `type`, `q`, `show=all`; сортировка `sort` (`date`, `stand`, `user`); пагинация `page` (по 5) |
+| `/bookings/<id>/` | `bookings:detail` | бронирование со стендом и арендатором (`select_related`) |
+| `/bookings/statistics/` | `bookings:statistics` | агрегаты, группировка, фильтр по агрегату, последние бронирования |
+
+Обработка ошибок: несуществующий объект даёт ответ 404 (`get_object_or_404`), некорректные параметры фильтров, даты и номера страницы не приводят к ошибке (сообщение или значение по умолчанию), пустые выборки показывают сообщение. Имена URL, шаблоны, навигация и оформление сохранены.
+
+## 8. Структура проекта
 
 ```text
 проект фреймворк/
-├── bookings/               # приложение: бронирования и статистика
-│   ├── templates/bookings/ # booking_list, booking_detail, statistics,
-│   │                       # includes/booking_status
-│   ├── urls.py, views.py, tests.py
-├── homepage/               # приложение: главная, страница 404, static
-│   ├── static/homepage/    # css/style.css, js/main.js, img/logo.png
-│   ├── templates/homepage/index.html
-│   ├── urls.py, views.py, tests.py
-├── stands/                 # приложение: стенды и поиск свободных
-│   ├── templates/stands/   # stand_list, stand_detail, available,
-│   │                       # includes/stand_card
-│   ├── urls.py, views.py, tests.py
-├── templates/              # base.html, 404.html, includes/navigation.html
-│
-├── db/                     # слой базы данных (ПР7)
-│   ├── database.py         # подключение к SQLite
-│   └── import_json.py      # перенос данных из JSON в SQLite
-├── sql/
-│   ├── schema.sql          # создание таблиц
-│   └── queries.sql         # SQL-запросы проекта
-├── data/
-│   ├── tradestands.sqlite  # база данных SQLite
-│   └── stands.json, users.json, bookings.json   # исходные данные
-│
-├── models/                 # классы предметной области (ПР3)
-├── tests/                  # pytest-тесты (предметная область, БД)
-├── tradestands/            # конфигурация Django-проекта
-├── legacy/                 # модули ПР2 (не используются)
-├── main.py, storage.py, utils.py   # консольная версия (JSON)
-├── manage.py
+├── stands/        # модель Stand, представления стендов, admin, тесты
+├── users/         # модель User (арендатор), admin, тесты
+├── bookings/      # модель Booking, список/карточка/статистика, тесты
+├── homepage/      # главная, 404, статические файлы
+├── templates/     # base.html, 404.html, includes/navigation.html
+├── fixtures/      # tradestands.json (dumpdata/loaddata)
+├── tradestands/   # настройки, urls, sqlite_unicode.py, тесты проекта
+├── db/            # скрипты: перенос в ORM, инспекция, модуль SQL-слоя ПР7
+├── sql/           # schema.sql, queries.sql (SQL-слой ПР7)
+├── data/          # tradestands.sqlite (исходная база ПР7), JSON
+├── models/, tests/, legacy/   # консольная версия и её тесты
+├── main.py, storage.py, utils.py, manage.py
 └── README.md
 ```
 
-Отдельное приложение для пользователей не создаётся: Django предоставляет встроенную модель `User`.
+Файлы SQL-слоя ПР7 (`sql/schema.sql`, `sql/queries.sql`, `db/database.py`, `db/import_json.py`) сохранены как предыдущая реализация; веб-представления их больше не используют. Консольная версия (`main.py`) продолжает работать с JSON.
 
-## 5. База данных (ПР7)
-
-База данных `data/tradestands.sqlite` – один файл SQLite. Структура задана в `sql/schema.sql` (повторный запуск безопасен: `CREATE TABLE IF NOT EXISTS`).
-
-### Таблица `stands` – торговые стенды
-
-| Поле | Тип | Назначение |
-|------|-----|------------|
-| `id` | INTEGER, PRIMARY KEY | идентификатор |
-| `name` | TEXT, NOT NULL | название стенда |
-| `area` | REAL, NOT NULL, `CHECK (area > 0)` | площадь, кв.м |
-| `stand_type` | TEXT, NOT NULL | тип (Стандарт, Премиум, Остров) |
-
-### Таблица `users` – арендаторы
-
-| Поле | Тип | Назначение |
-|------|-----|------------|
-| `id` | INTEGER, PRIMARY KEY | идентификатор |
-| `name` | TEXT, NOT NULL | имя или название организации |
-| `email` | TEXT, NOT NULL | электронная почта |
-
-### Таблица `bookings` – бронирования
-
-| Поле | Тип | Назначение |
-|------|-----|------------|
-| `id` | INTEGER, PRIMARY KEY | идентификатор |
-| `stand_id` | INTEGER, NOT NULL, FOREIGN KEY → `stands(id)` | стенд |
-| `user_id` | INTEGER, NOT NULL, FOREIGN KEY → `users(id)` | арендатор |
-| `booking_date` | TEXT, NOT NULL | дата в формате `ГГГГ-ММ-ДД` |
-| `is_cancelled` | INTEGER, NOT NULL, DEFAULT 0 | 0 – активно, 1 – отменено |
-
-Связи: один стенд и один арендатор могут иметь много бронирований; каждое бронирование относится к одному стенду и одному арендатору. Дополнительно: индекс по `(stand_id, booking_date)` и уникальный индекс, запрещающий два **активных** бронирования стенда на одну дату.
-
-### Подключение и импорт
-
-- `db/database.py` – `get_connection()` включает `PRAGMA foreign_keys = ON`; `open_connection()` для веб-представлений настраивает `sqlite3.Row` (доступ к полям по именам) и закрывает соединение. Если файла базы нет, возникает понятная ошибка, а не пустая база.
-- `db/import_json.py` – создаёт таблицы и переносит данные из JSON (порядок: стенды, арендаторы, бронирования). Повторный запуск не затирает данные; для перезаполнения нужен флаг `--reset`.
-
-### SQL-запросы
-
-В `sql/queries.sql` сохранено 20 проверенных запросов: списки (`SELECT`, `DISTINCT`), фильтрация (`WHERE`, `BETWEEN`, `LIKE`), соединения (`JOIN`), подзапрос `NOT IN` (свободные стенды), агрегаты (`COUNT`, `MIN`, `MAX`, `AVG`, `SUM`), группировка (`GROUP BY`), фильтрация групп (`HAVING`), сортировка и `LIMIT/OFFSET`. Значения в веб-приложении передаются параметрами `?`, подстановка через f-строки не используется.
-
-## 6. Веб-интерфейс
-
-| URL | Имя маршрута | Данные (SQL) |
-|-----|--------------|--------------|
-| `/` | `homepage:index` | – |
-| `/stands/` | `stands:list` | список стендов; поиск `?q=`, фильтр `?min_area=` (`WHERE`, параметры) |
-| `/stands/<id>/` | `stands:detail` | стенд, занятость на дату `?date=` (`COUNT`), история бронирований (`JOIN`) |
-| `/stands/available/` | `stands:available` | стенды, свободные на дату `?date=` (подзапрос `NOT IN`) |
-| `/bookings/` | `bookings:bookings` | активные бронирования (`JOIN`); `?show=all` – вместе с отменёнными |
-| `/bookings/<id>/` | `bookings:detail` | бронирование с данными стенда и арендатора (`JOIN`) |
-| `/bookings/statistics/` | `bookings:statistics` | агрегаты, `GROUP BY`, `HAVING`, `LIMIT` |
-
-Представления выполняют SQL-запрос, получают строки `sqlite3.Row`, передают их в шаблон через контекст; страница создаётся шаблоном Django. Если объект не найден, возвращается страница с кодом 404; для несуществующих адресов подключён `handler404`.
-
-## 7. Django Template Language
-
-- базовый шаблон `templates/base.html` с блоками `title` и `content`, дочерние шаблоны используют `{% extends %}`;
-- включаемые шаблоны: навигация, карточка стенда, статус бронирования;
-- данные передаются через контекст, используются `{% for %}` с `{% empty %}` и `{% if %}`;
-- фильтры: `length`, `default`, `floatformat`, `date`;
-- ссылки формируются через `{% url %}` с пространствами имён (`stands:`, `bookings:`, `homepage:`);
-- статика (`homepage/static/homepage/`): собственные CSS, JavaScript и логотип подключаются через `{% load static %}`.
-
-## 8. Хранение данных
-
-- Веб-приложение работает с базой SQLite `data/tradestands.sqlite`.
-- JSON-файлы `data/stands.json`, `data/users.json`, `data/bookings.json` сохранены: они служат источником данных для импорта и используются консольной версией (`main.py`, `storage.py`).
-- Django ORM и модели Django на текущем этапе не используются; формы не реализованы.
-
-## 9. Тестирование и качество кода
+## 9. Запуск проекта
 
 ```text
-python manage.py check
-python manage.py test        # веб-страницы (на временной копии БД)
-pytest -v                    # предметная область, БД, файл queries.sql
-flake8 . --extend-exclude=venv
-```
-
-Веб-тесты создают временную базу из JSON и не изменяют рабочий файл `tradestands.sqlite`.
-
-## 10. Запуск проекта
-
-```text
+git clone <адрес репозитория>
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
-python -m db.import_json     # создать и заполнить базу (если файла нет)
 python manage.py migrate
+python manage.py loaddata tradestands.json
 python manage.py runserver
 ```
 
-После запуска открыть `http://127.0.0.1:8000/`. Консольная версия: `python main.py`.
+Открыть `http://127.0.0.1:8000/`. Данные также можно перенести из исходной базы ПР7: `python db/import_sqlite_to_orm.py` (вместо `loaddata`). При `DEBUG = False` сервер разработки не раздаёт статику: используйте `python manage.py runserver --insecure` или включите `DEBUG = True`.
 
-Пересоздать базу из JSON: `python -m db.import_json --reset`. При `DEBUG = False` сервер разработки не раздаёт статику: для просмотра с оформлением используйте `python manage.py runserver --insecure` или включите `DEBUG = True`.
+Консольная версия: `python main.py`.
 
-## 11. Текущее состояние проекта
+## 10. Проверка
 
-Реализовано:
+```text
+python manage.py check
+python manage.py showmigrations
+python manage.py makemigrations --check
+python manage.py test        # тесты моделей, ORM-запросов, страниц, переноса данных
+pytest -v                    # тесты консольной версии и SQL-слоя ПР7
+flake8 . --extend-exclude=venv
+```
 
-- предметные классы, консольный интерфейс (JSON), тесты;
-- Django-проект `tradestands`, приложения `homepage`, `stands`, `bookings`;
-- шаблоны Django, наследование, `include`, фильтры, именованные URL, статика;
-- база данных SQLite: схема, ключи, импорт из JSON, 20 SQL-запросов;
-- веб-страницы, получающие данные из SQLite: список и страница стенда, активные бронирования, поиск свободных стендов на дату, статистика.
+Файл `db.sqlite3` не хранится в репозитории (после клонирования таблицы создаются миграциями, данные загружаются fixture).
 
-Формы Django, модели Django ORM и миграции для данных проекта пока не реализованы.
+## 11. Текущее состояние и планы
 
-## 12. Дальнейшее развитие
+Реализовано: модели и связи, миграции, перенос данных из базы ПР7, чтение данных через ORM, фильтрация, поиск, сортировка, пагинация, статистика, тесты.
 
-Подключение базы данных к Django через ORM и миграции, формы создания и отмены бронирований, добавления стендов, аутентификация, API.
+Не реализовано: формы Django и создание/изменение/отмена бронирований через веб-интерфейс, аутентификация и API – следующие этапы.
+
+## Автор
+
+Манукян Андрей Сержикович, ЭФБО-11-24.

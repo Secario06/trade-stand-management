@@ -1,91 +1,82 @@
 {% extends "base.html" %}
 
 {% block title %}
-    {% if stand %}
-        {{ stand.name }} – Торговые стенды
-    {% else %}
-        Стенд не найден – Торговые стенды
-    {% endif %}
+    {{ stand.name }} – Торговые стенды
 {% endblock %}
 
 {% block content %}
-    {% if stand %}
-        {% if invalid_date %}
-            <div class="alert alert-warning">
-                Неверная дата, показана доступность на сегодня.
-            </div>
-        {% endif %}
-
-        <div class="card stand-card">
-            <div class="card-body">
-                <h1 class="card-title h3">
-                    {{ stand.name|default:"Без названия" }}
-                </h1>
-
-                <p class="card-text">
-                    <strong>ID:</strong> {{ stand.id }}
-                </p>
-
-                <p class="card-text">
-                    <strong>Тип:</strong> {{ stand.stand_type }}
-                </p>
-
-                <p class="card-text">
-                    <strong>Площадь:</strong>
-                    {{ stand.area|floatformat:1 }} кв.м.
-                </p>
-
-                <p class="card-text">
-                    Доступность на {{ check_date|date:"d.m.Y" }}:
-                    {% if available %}
-                        <span class="badge bg-success">доступен</span>
-                    {% else %}
-                        <span class="badge bg-danger">занят</span>
-                    {% endif %}
-                </p>
-
-                <p class="card-text text-muted">
-                    {{ availability_text }}
-                </p>
-
-                <form method="get" class="row g-2 mb-3">
-                    <div class="col-auto">
-                        <input
-                            type="date"
-                            name="date"
-                            class="form-control"
-                            value="{{ check_date|date:'Y-m-d' }}"
-                        >
-                    </div>
-                    <div class="col-auto">
-                        <button type="submit" class="btn btn-primary">
-                            Проверить дату
-                        </button>
-                    </div>
-                </form>
-            </div>
+    {% if invalid_date %}
+        <div class="alert alert-warning">
+            Неверная дата, показана доступность на сегодня.
         </div>
-
-        <h2 class="h4 mt-4">История бронирований</h2>
-        <ul class="list-group">
-            {% for booking in history %}
-                <li class="list-group-item d-flex justify-content-between">
-                    <span>
-                        <a href="{% url 'bookings:detail' booking.id %}">
-                            Бронирование №{{ booking.id }}
-                        </a>
-                        – {{ booking.booking_date }}, {{ booking.user_name }}
-                    </span>
-                    {% include "bookings/includes/booking_status.html" %}
-                </li>
-            {% empty %}
-                <li class="list-group-item">Бронирований пока нет.</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <h1 class="text-danger">Стенд не найден</h1>
-        <p>Стенд с указанным идентификатором отсутствует.</p>
     {% endif %}
+
+    <div class="card stand-card">
+        <div class="card-body">
+            <h1 class="card-title h3">
+                {{ stand.name|default:"Без названия" }}
+            </h1>
+
+            <p class="card-text">
+                <strong>ID:</strong> {{ stand.pk }}
+            </p>
+
+            <p class="card-text">
+                <strong>Тип:</strong> {{ stand.stand_type }}
+            </p>
+
+            <p class="card-text">
+                <strong>Площадь:</strong>
+                {{ stand.area|floatformat:1 }} кв.м.
+            </p>
+
+            <p class="card-text">
+                Доступность на {{ check_date|date:"d.m.Y" }}:
+                {% if available %}
+                    <span class="badge bg-success">доступен</span>
+                {% else %}
+                    <span class="badge bg-danger">занят</span>
+                {% endif %}
+            </p>
+
+            <p class="card-text text-muted">
+                {{ availability_text }}
+            </p>
+
+            <form method="get" class="row g-2 mb-3">
+                <div class="col-auto">
+                    <input
+                        type="date"
+                        name="date"
+                        class="form-control"
+                        value="{{ check_date|date:'Y-m-d' }}"
+                    >
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">
+                        Проверить дату
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <h2 class="h4 mt-4">История бронирований</h2>
+    <ul class="list-group">
+        {% for booking in history %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>
+                    <a href="{% url 'bookings:detail' booking.pk %}">
+                        Бронирование №{{ booking.pk }}
+                    </a>
+                    – {{ booking.booking_date|date:"d.m.Y" }}, {{ booking.user.name }}
+                </span>
+                {% include "bookings/includes/booking_status.html" %}
+            </li>
+        {% empty %}
+            <li class="list-group-item">Бронирований пока нет.</li>
+        {% endfor %}
+    </ul>
 
     <a
         href="{% url 'stands:list' %}"

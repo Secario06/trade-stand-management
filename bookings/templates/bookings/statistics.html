@@ -42,7 +42,7 @@
     <ul class="list-group mb-4">
         {% for item in by_stand %}
             <li class="list-group-item d-flex justify-content-between">
-                <span>{{ item.stand_name }}</span>
+                <span>{{ item.name }}</span>
                 <span class="badge bg-primary">{{ item.bookings_count }}</span>
             </li>
         {% empty %}
@@ -54,7 +54,7 @@
     <ul class="list-group mb-4">
         {% for item in by_user %}
             <li class="list-group-item d-flex justify-content-between">
-                <span>{{ item.user_name }}</span>
+                <span>{{ item.name }}</span>
                 <span class="badge bg-primary">{{ item.bookings_count }}</span>
             </li>
         {% empty %}
@@ -66,7 +66,7 @@
     <ul class="list-group mb-4">
         {% for item in popular %}
             <li class="list-group-item d-flex justify-content-between">
-                <span>{{ item.stand_name }}</span>
+                <span>{{ item.name }}</span>
                 <span class="badge bg-success">{{ item.bookings_count }}</span>
             </li>
         {% empty %}
@@ -93,11 +93,12 @@
     <ul class="list-group">
         {% for booking in latest %}
             <li class="list-group-item">
-                <a href="{% url 'bookings:detail' booking.id %}">
-                    Бронирование №{{ booking.id }}
+                <a href="{% url 'bookings:detail' booking.pk %}">
+                    Бронирование №{{ booking.pk }}
                 </a>
-                – {{ booking.stand_name }}, {{ booking.booking_date }},
-                {{ booking.user_name }}
+                – {{ booking.stand.name }},
+                {{ booking.booking_date|date:"d.m.Y" }},
+                {{ booking.user.name }}
             </li>
         {% empty %}
             <li class="list-group-item">Бронирований пока нет.</li>

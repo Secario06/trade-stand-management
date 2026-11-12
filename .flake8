@@ -7,7 +7,8 @@ exclude =
     .git,
     .idea,
     .vscode,
-    tests/__pycache__
+    tests/__pycache__,
+    */migrations
 max-line-length = 79
 per-file-ignores =
     tradestands/settings.py:E501

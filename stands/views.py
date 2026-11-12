@@ -1,10 +1,11 @@
 import math
 from datetime import date
 
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 
-from db.database import open_connection
+from bookings.models import Booking
 from models.bookings import get_booking_status
+from stands.models import Stand
 
 
 def _parse_date(value):
@@ -16,11 +17,11 @@ def _parse_date(value):
 
 
 def stands(request):
-    """Страница /stands/: список стендов из SQLite с поиском и фильтром."""
+    """Страница /stands/: список стендов с поиском и фильтром по площади."""
     query = request.GET.get("q", "").strip()
     raw_area = request.GET.get("min_area", "").strip()
 
-    min_area = 0.0
+    min_area = None
     error = ""
     if raw_area:
         try:
@@ -28,24 +29,17 @@ def stands(request):
         except ValueError:
             min_area = math.nan
         if not math.isfinite(min_area):
-            min_area = 0.0
+            min_area = None
             error = "Минимальная площадь должна быть числом."
 
-    with open_connection() as conn:
-        stands_list = conn.execute(
-            """
-            SELECT
-                id,
-                name,
-                area,
-                stand_type
-            FROM stands
-            WHERE lower(name) LIKE lower(?)
-              AND area >= ?
-            ORDER BY name;
-            """,
-            ["%" + query + "%", min_area],
-        ).fetchall()
+    stands_list = Stand.objects.all()
+    if query:
+        # Поиск по части названия без учёта регистра.
+        stands_list = stands_list.filter(name__icontains=query)
+    if min_area is not None:
+        # Площадь не меньше заданной.
+        stands_list = stands_list.filter(area__gte=min_area)
+    stands_list = stands_list.order_by("name")
 
     context = {
         "stands": stands_list,
@@ -58,74 +52,31 @@ def stands(request):
 
 def stand_detail(request, stand_id):
     """Страница /stands/<id>/: информация о стенде и его доступность."""
-    with open_connection() as conn:
-        stand = conn.execute(
-            """
-            SELECT
-                id,
-                name,
-                area,
-                stand_type
-            FROM stands
-            WHERE id = ?;
-            """,
-            [stand_id],
-        ).fetchone()
+    # Если стенда нет, Django вернёт ответ 404.
+    stand = get_object_or_404(Stand, pk=stand_id)
 
-        context = {"stand": stand}
-        if stand is not None:
-            # Дата проверки передаётся GET-параметром ?date=ГГГГ-ММ-ДД.
-            requested = request.GET.get("date", "")
-            check_date = _parse_date(requested)
-            invalid_date = check_date is None and bool(requested)
-            if check_date is None:
-                check_date = date.today()
+    # Дата проверки передаётся GET-параметром ?date=ГГГГ-ММ-ДД.
+    requested = request.GET.get("date", "")
+    check_date = _parse_date(requested)
+    invalid_date = check_date is None and bool(requested)
+    if check_date is None:
+        check_date = date.today()
 
-            busy = conn.execute(
-                """
-                SELECT
-                    COUNT(*) AS busy
-                FROM bookings
-                WHERE stand_id = ?
-                  AND booking_date = ?
-                  AND is_cancelled = 0;
-                """,
-                [stand_id, check_date.isoformat()],
-            ).fetchone()["busy"]
+    available = stand.is_available_on(check_date)
 
-            history = conn.execute(
-                """
-                SELECT
-                    bookings.id,
-                    bookings.booking_date,
-                    bookings.is_cancelled,
-                    users.name AS user_name
-                FROM bookings
-                JOIN users
-                    ON bookings.user_id = users.id
-                WHERE bookings.stand_id = ?
-                ORDER BY bookings.booking_date;
-                """,
-                [stand_id],
-            ).fetchall()
+    # История бронирований стенда через обратную связь;
+    # select_related загружает арендаторов тем же запросом.
+    history = stand.bookings.select_related("user")
 
-            available = busy == 0
-            context.update(
-                {
-                    "check_date": check_date,
-                    "invalid_date": invalid_date,
-                    "available": available,
-                    "availability_text": get_booking_status(available),
-                    "history": history,
-                }
-            )
-
-    return render(
-        request,
-        "stands/stand_detail.html",
-        context,
-        status=404 if stand is None else 200,
-    )
+    context = {
+        "stand": stand,
+        "check_date": check_date,
+        "invalid_date": invalid_date,
+        "available": available,
+        "availability_text": get_booking_status(available),
+        "history": history,
+    }
+    return render(request, "stands/stand_detail.html", context)
 
 
 def available_stands(request):
@@ -135,25 +86,16 @@ def available_stands(request):
 
     free_stands = []
     if check_date is not None:
-        with open_connection() as conn:
-            free_stands = conn.execute(
-                """
-                SELECT
-                    stands.id,
-                    stands.name,
-                    stands.area,
-                    stands.stand_type
-                FROM stands
-                WHERE stands.id NOT IN (
-                    SELECT bookings.stand_id
-                    FROM bookings
-                    WHERE bookings.booking_date = ?
-                      AND bookings.is_cancelled = 0
-                )
-                ORDER BY stands.name;
-                """,
-                [check_date.isoformat()],
-            ).fetchall()
+        # Идентификаторы стендов с активной бронью на эту дату.
+        booked_stand_ids = Booking.objects.filter(
+            booking_date=check_date,
+            is_cancelled=False,
+        ).values_list("stand_id", flat=True)
+
+        # Исключаем занятые стенды; отменённые брони не блокируют.
+        free_stands = Stand.objects.exclude(
+            pk__in=booked_stand_ids,
+        ).order_by("name")
 
     context = {
         "stands": free_stands,

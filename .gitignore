@@ -10,3 +10,6 @@ dist/
 build/
 venv/
 db.sqlite3
+
+# резервная копия исходной базы ПР7 (локальная)
+data/*_backup.sqlite
